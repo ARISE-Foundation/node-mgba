@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.gb binary
+*.sav binary
+*.ss0 binary
+*.so binary
+*.so.* binary
+

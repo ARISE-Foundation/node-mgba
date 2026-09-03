@@ -1,0 +1,17 @@
+node_modules/
+dist/
+vendor/mgba-src/
+native/*.so
+native/*.o
+*.tmp
+*.state
+*.ss*
+*.gb
+*.gbc
+*.gba
+fixtures/
+vendor/mgba-dist/share/
+gui/dist/
+.vscode/
+.DS_Store
+

@@ -1,0 +1,116 @@
+{
+  "name": "node-mgba",
+  "version": "0.1.1",
+  "packageManager": "pnpm@10.19.0",
+  "description": "Extensible, plugin-first headless Game Boy / GBA emulator SDK for Node.js powered by libmgba",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "license": "MIT",
+  "author": "Joel Zhang <joel@jcz.dev>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ARISE-Foundation/node-mgba.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ARISE-Foundation/node-mgba/issues"
+  },
+  "homepage": "https://github.com/ARISE-Foundation/node-mgba#readme",
+  "keywords": [
+    "gameboy",
+    "gba",
+    "emulator",
+    "libmgba",
+    "mgba",
+    "headless",
+    "automation",
+    "memory-reader",
+    "pokemon"
+  ],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "dist/src",
+    "dist/plugins",
+    "native/libmgba_shim.so",
+    "vendor/mgba-dist/lib/libmgba.so*"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./browser": {
+      "types": "./dist/src/browser/index.d.ts",
+      "import": "./dist/src/browser/index.js",
+      "default": "./dist/src/browser/index.js"
+    },
+    "./plugins": {
+      "types": "./dist/plugins/index.d.ts",
+      "import": "./dist/plugins/index.js"
+    },
+    "./schema": {
+      "types": "./dist/src/schema/index.d.ts",
+      "import": "./dist/src/schema/index.js"
+    },
+    "./testing": {
+      "types": "./dist/src/testing/index.d.ts",
+      "import": "./dist/src/testing/index.js"
+    }
+  },
+  "scripts": {
+    "build:native": "make -C native",
+    "build:ts": "rm -rf dist && tsc -p tsconfig.json",
+    "build:gui": "vite build --config gui/vite.config.ts",
+    "build": "npm-run-all build:native build:ts build:gui",
+    "pretest": "pnpm build",
+    "prepublishOnly": "pnpm build",
+    "type-check": "tsc --noEmit && vue-tsc --noEmit -p gui/tsconfig.json",
+    "lint": "eslint . && tsc --noEmit && vue-tsc --noEmit -p gui/tsconfig.json",
+    "test": "node --import tsx/esm --test tests/*.test.ts",
+    "bench": "tsx benchmarks/benchmark.ts",
+    "gui": "tsx gui/server.ts",
+    "gui:dev": "vite --config gui/vite.config.ts"
+  },
+  "dependencies": {
+    "koffi": "^3.1.6",
+    "sharp": "^0.33.5",
+    "xxhash-wasm": "^1.1.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "koffi",
+      "sharp"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.4.0",
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.68.0",
+    "@typescript-eslint/parser": "^8.68.0",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "eslint": "^10.9.1",
+    "eslint-plugin-vue": "^10.10.0",
+    "globals": "^17.11.0",
+    "lucide-vue-next": "^1.0.0",
+    "npm-run-all": "^4.1.5",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.12",
+    "typescript": "^5.7.3",
+    "vite": "^8.2.2",
+    "vue": "^3.5.42",
+    "vue-eslint-parser": "^10.4.1",
+    "vue-tsc": "^3.3.11",
+    "ws": "^8.21.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
+
