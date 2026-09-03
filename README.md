@@ -193,6 +193,23 @@ export ROM_PATH="/path/to/game.gb"
 pnpm test
 ```
 
+### Interactive Web GUI Studio
+
+`node-mgba` includes a built-in Vue 3 web interface for debugging emulation, testing input sequences, and inspecting real-time RAM decoding:
+
+```bash
+# Build the native shim, TypeScript, and GUI bundle
+pnpm run build
+
+# Launch the GUI server with a Game Boy ROM (opens at http://localhost:3456)
+ROM_PATH="/path/to/game.gb" pnpm run gui
+
+# Or run the GUI frontend in Vite development mode with hot-reloading
+pnpm run gui:dev
+```
+
+> **Note**: The GUI's state inspector and telemetry HUD panels are currently tailored specifically for **Pokémon Red & Blue** (displaying real-time party stats, inventory, badges, and map coordinates).
+
 ---
 
 ## Subpath Exports
