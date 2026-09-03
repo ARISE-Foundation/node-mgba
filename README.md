@@ -5,19 +5,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Linux x64](https://img.shields.io/badge/Platform-Linux%20x64-brightgreen.svg)](#)
 
-> **Blazing-fast, cycle-accurate Game Boy & GBA emulation engine for Node.js. Engineered for AI agents, frame-perfect automation, and sub-millisecond RAM introspection.**
+> **Scriptable, headless mGBA emulator for Node.js — like PyBoy, but powered by `libmgba` for Game Boy, GBC, and GBA.**
 
-Originally created to power **[Gemini Plays Pokémon](https://gpp-viewer.arisef.org)** live on **[Twitch](https://www.twitch.tv/gemini_plays_pokemon/about)**, `node-mgba` embeds cycle-accurate C `libmgba` into an async TypeScript SDK.
+`node-mgba` provides native Node.js bindings to the C `libmgba` core. It is built for scripting, agent automation, and machine learning research, giving you direct programmatic control over the emulator:
 
-It delivers headless throughput exceeding **1,100+ FPS** in thread-isolated workers (up to **3,400+ FPS** in direct core mode) with non-blocking emulation, real-time media streaming, and microsecond RAM state decoding.
+- **Headless & fast:** Runs without a GUI window at 1,000+ to 3,400+ FPS.
+- **Controls & state:** Step frames, inject button inputs, and save/load state in memory or to disk.
+- **Direct memory access:** Read and write directly to memory buses (WRAM, VRAM, HRAM) without socket overhead.
+- **Screen & audio capture:** Grab raw pixel buffers, encode to PNG/WebP, or stream audio/video frames.
+- **Plugin decoders:** Optional high-level memory decoders (includes Pokémon Red/Blue state parsing).
 
-## Features
-
-- **Multi-Console Emulation**: Game Boy (GB), Game Boy Color (GBC), Super Game Boy (SGB), and Game Boy Advance (GBA).
-- **Automation & Scripting**: Programmatic frame stepping, button presses, input sequences, and condition-based waiting (`waitFor`).
-- **Memory & Savestates**: Direct memory read/write, multi-address batch reads, and file or in-memory savestates.
-- **Extensible Plugins & Schemas**: Declarative binary schema DSL and high-level game state plugins (including built-in Pokémon Red/Blue state decoders).
-- **Media Capture & Streaming**: Capture frames as PNG/WebP, record video with FFmpeg, or stream audio and video over WebSockets.
+Originally built to power the 24/7 autonomous agent on **[Gemini Plays Pokémon](https://www.twitch.tv/gemini_plays_pokemon/about)** ([web viewer](https://gpp-viewer.arisef.org)).
 
 ## Installation
 
