@@ -227,9 +227,10 @@ export class MgbaEmulator {
                         const mask = resolveButtonMask(action.button);
                         const hold = action.holdFrames ?? defaultHold;
                         const release = action.releaseFrames ?? defaultRelease;
+                        const baseMask = this.currentKeyMask & ~mask;
 
-                        await this.step(hold, this.currentKeyMask | mask, { signal: options.signal });
-                        await this.step(release, this.currentKeyMask, { signal: options.signal });
+                        await this.step(hold, baseMask | mask, { signal: options.signal });
+                        await this.step(release, baseMask, { signal: options.signal });
                         break;
                     }
                     case 'hold': {

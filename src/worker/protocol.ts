@@ -185,6 +185,11 @@ export interface PausePlaybackRequest extends StatefulWorkerRequestBase {
     readonly type: 'pausePlayback';
 }
 
+export interface SetKeyMaskRequest extends StatefulWorkerRequestBase {
+    readonly type: 'setKeyMask';
+    readonly mask: number;
+}
+
 export interface EnqueueSequenceRequest extends StatefulWorkerRequestBase {
     readonly type: 'enqueueSequence';
     readonly sequenceId: number;
@@ -258,6 +263,7 @@ export type WorkerRequest =
     | StepSequenceRequest
     | StartPlaybackRequest
     | PausePlaybackRequest
+    | SetKeyMaskRequest
     | EnqueueSequenceRequest
     | CancelSequenceRequest
     | InitMediaPortRequest
@@ -316,6 +322,7 @@ export type WorkerRequestPayload =
     | { readonly type: 'stepSequence'; readonly actions: readonly InputAction[]; readonly options: StepSequenceOptions }
     | { readonly type: 'startPlayback'; readonly fps?: number | undefined }
     | { readonly type: 'pausePlayback' }
+    | { readonly type: 'setKeyMask'; readonly mask: number }
     | { readonly type: 'enqueueSequence'; readonly sequenceId: number; readonly actions: readonly InputAction[]; readonly options?: StepSequenceOptions | undefined }
     | { readonly type: 'cancelSequence'; readonly sequenceId: number }
     | { readonly type: 'initMediaPort'; readonly port: import('node:worker_threads').MessagePort }

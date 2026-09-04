@@ -2,15 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     MgbaEmulator,
-    RealtimeEmulationLoop,
     WorkerEmulatorClient,
     press,
     wait,
-    release,
     normalizeMemoryRegion,
     normalizeMemorySpace,
     parseSinkIdentity,
     resolveButtonMask,
+    expandButtonsToInputActions,
+    validateStepSequenceOptions,
+    type PressButtonsOptions,
 } from '../src/index.js';
 import { getTestRomPath, hasTestRom } from './helpers/rom.js';
 
@@ -189,19 +190,15 @@ test('Contracts & Error Boundaries', async (t) => {
         await emulator.close();
     });
 
-    await t.test('11. pressButtons and resolveButtonMask must normalize strings and strictly validate numeric masks', async () => {
-        const emulator = new MgbaEmulator();
-        await emulator.loadROM(romPath);
-        const loop = new RealtimeEmulationLoop(emulator);
-
-        // pressButtons accepts lowercase and 'wait' keywords
+    await t.test('11. expandButtonsToInputActions and resolveButtonMask must normalize strings and strictly validate numeric masks', async () => {
+        // expandButtonsToInputActions accepts lowercase and 'wait' keywords
         assert.doesNotThrow(() => {
-            loop.pressButtons(['a', 'start', 'wait', 'LEFT'], { waitFrames: 0 });
+            expandButtonsToInputActions(['a', 'start', 'wait', 'LEFT']);
         });
 
-        // pressButtons rejects unrecognized buttons
+        // expandButtonsToInputActions rejects unrecognized buttons
         assert.throws(() => {
-            loop.pressButtons(['invalid_button']);
+            expandButtonsToInputActions(['invalid_button']);
         }, /Unrecognized button/i);
 
         // Numeric button bitmasks are strictly validated (0..0x3FF)
@@ -210,33 +207,14 @@ test('Contracts & Error Boundaries', async (t) => {
                 resolveButtonMask(invalid);
             }, /Invalid numeric button mask/i);
         }
-
-        await emulator.close();
     });
 
-    await t.test('12. RealtimeEmulationLoop must execute zero-frame sequences without stepping emulator', async () => {
-        let stepCount = 0;
-        const fakeEmulator = {
-            async step() {
-                stepCount++;
-                return {
-                    frameIndex: stepCount,
-                    pts: 0,
-                    width: 160,
-                    height: 144,
-                    strideBytes: 640,
-                    buffer: Buffer.alloc(92160),
-                };
-            },
-        };
-        const loop = new RealtimeEmulationLoop(fakeEmulator);
-        const handle = loop.executeSequence(
-            [{ type: 'press', button: 'A' }, { type: 'wait', frames: 0 }],
-            { holdFrames: 0, releaseFrames: 0, postStabilizationFrames: 0 },
-        );
-        const res = await handle.promise;
-        assert.equal(res.actionsExecuted, 2, 'Must report all 2 actions executed');
-        assert.equal(stepCount, 0, 'Zero-frame sequence must not step emulator frame clock');
+    await t.test('12. validateStepSequenceOptions must strictly validate waitFrames as non-negative integer', async () => {
+        for (const invalid of [-1, NaN, 1.5, Infinity, '10']) {
+            assert.throws(() => {
+                validateStepSequenceOptions<PressButtonsOptions>({ waitFrames: invalid as unknown as number });
+            }, /must be a non-negative finite integer/i);
+        }
     });
 
     await t.test('13. WorkerEmulatorClient must execute zero-frame sequences and report exact actionsExecuted', async () => {
@@ -259,138 +237,7 @@ test('Contracts & Error Boundaries', async (t) => {
         }
     });
 
-    await t.test('14. pressButtons must strictly validate waitFrames as non-negative integer', async () => {
-        const emulator = new MgbaEmulator();
-        await emulator.loadROM(romPath);
-        const loop = new RealtimeEmulationLoop(emulator);
-
-        for (const invalid of [-1, NaN, 1.5, Infinity, '10']) {
-            assert.throws(() => {
-                loop.pressButtons(['A'], { waitFrames: invalid as unknown as number });
-            }, /must be a non-negative finite integer/i);
-        }
-
-        await emulator.close();
-    });
-
-    await t.test('15. Bare release action must consume 1 frame in RealtimeEmulationLoop', async () => {
-        let stepCount = 0;
-        const fakeEmulator = {
-            async step() {
-                stepCount++;
-                return {
-                    frameIndex: stepCount,
-                    pts: 0,
-                    width: 160,
-                    height: 144,
-                    strideBytes: 640,
-                    buffer: Buffer.alloc(92160),
-                };
-            },
-        };
-        const loop = new RealtimeEmulationLoop(fakeEmulator, { fps: 10000 });
-        const handle = loop.executeSequence([release('A')], { postStabilizationFrames: 0 });
-        loop.start();
-        const res = await handle.promise;
-        await loop.pause();
-
-        assert.equal(res.actionsExecuted, 1);
-        assert.equal(stepCount, 1, 'Bare release action must consume 1 frame step');
-    });
-
-    await t.test('16. Multi-action drain must emit isSequenceComplete true only on terminal action', async () => {
-        let stepCount = 0;
-        const fakeEmulator = {
-            async step() {
-                stepCount++;
-                return {
-                    frameIndex: stepCount,
-                    pts: 0,
-                    width: 160,
-                    height: 144,
-                    strideBytes: 640,
-                    buffer: Buffer.alloc(92160),
-                };
-            },
-        };
-        const loop = new RealtimeEmulationLoop(fakeEmulator, { fps: 10000 });
-        const events: { type: string; done: boolean }[] = [];
-        loop.on('actionComplete', (act, done) => {
-            events.push({ type: act.type, done });
-        });
-
-        const handle = loop.executeSequence(
-            [wait(0), wait(0), press('A', 1, 0)],
-            { postStabilizationFrames: 0 },
-        );
-        loop.start();
-        const res = await handle.promise;
-        await loop.pause();
-
-        assert.equal(res.actionsExecuted, 3);
-        assert.equal(events.length, 3);
-        assert.equal(events[0]?.done, false, 'First drained action must NOT be marked sequenceComplete');
-        assert.equal(events[1]?.done, false, 'Second drained action must NOT be marked sequenceComplete');
-        assert.equal(events[2]?.done, true, 'Terminal action must be marked sequenceComplete');
-    });
-
-    await t.test('17. Realtime sequence with postStabilizationFrames reports exact user actionsExecuted', async () => {
-        let stepCount = 0;
-        const fakeEmulator = {
-            async step() {
-                stepCount++;
-                return {
-                    frameIndex: stepCount,
-                    pts: 0,
-                    width: 160,
-                    height: 144,
-                    strideBytes: 640,
-                    buffer: Buffer.alloc(92160),
-                };
-            },
-        };
-        const loop = new RealtimeEmulationLoop(fakeEmulator, { fps: 10000 });
-        const handle = loop.executeSequence(
-            [press('A', 1, 0)],
-            { postStabilizationFrames: 2 },
-        );
-        loop.start();
-        const res = await handle.promise;
-        await loop.pause();
-
-        assert.equal(res.actionsExecuted, 1, 'Must report 1 user action executed despite synthetic post-stabilization wait');
-        assert.equal(stepCount, 3, '1 hold frame + 2 post-stabilization frames = 3 steps');
-    });
-
-    await t.test('18. Trailing zero-frame action must not advance extra frame in RealtimeEmulationLoop', async () => {
-        let stepCount = 0;
-        const fakeEmulator = {
-            async step() {
-                stepCount++;
-                return {
-                    frameIndex: stepCount,
-                    pts: 0,
-                    width: 160,
-                    height: 144,
-                    strideBytes: 640,
-                    buffer: Buffer.alloc(92160),
-                };
-            },
-        };
-        const loop = new RealtimeEmulationLoop(fakeEmulator, { fps: 10000 });
-        const handle = loop.executeSequence(
-            [press('A', 1, 0), wait(0)],
-            { postStabilizationFrames: 0 },
-        );
-        loop.start();
-        const res = await handle.promise;
-        await loop.pause();
-
-        assert.equal(res.actionsExecuted, 2);
-        assert.equal(stepCount, 1, '1 hold frame + 0 trailing wait frames must equal 1 step');
-    });
-
-    await t.test('19. Trailing zero-frame action in worker actor must advance exact 1 frame', async () => {
+    await t.test('14. Trailing zero-frame action in worker actor must advance exact 1 frame', async () => {
         const client = new WorkerEmulatorClient();
         try {
             await client.loadROM(romPath);
@@ -410,34 +257,7 @@ test('Contracts & Error Boundaries', async (t) => {
         }
     });
 
-    await t.test('20. User action with isPostStabilization metadata must not be suppressed from actionsExecuted', async () => {
-        let stepCount = 0;
-        const fakeEmulator = {
-            async step() {
-                stepCount++;
-                return {
-                    frameIndex: stepCount,
-                    pts: 0,
-                    width: 160,
-                    height: 144,
-                    strideBytes: 640,
-                    buffer: Buffer.alloc(92160),
-                };
-            },
-        };
-        const loop = new RealtimeEmulationLoop(fakeEmulator, { fps: 10000 });
-        const handle = loop.executeSequence(
-            [press('A', 1, 0, { isPostStabilization: true } as unknown as import('../src/types/index.js').InputActionMetadata)],
-            { postStabilizationFrames: 0 },
-        );
-        loop.start();
-        const res = await handle.promise;
-        await loop.pause();
-
-        assert.equal(res.actionsExecuted, 1, 'Must report 1 user action executed');
-    });
-
-    await t.test('21. High FPS worker playback must not starve control requests', async () => {
+    await t.test('15. High FPS worker playback must not starve control requests', async () => {
         const client = new WorkerEmulatorClient();
         try {
             await client.loadROM(romPath);
@@ -462,7 +282,7 @@ test('Contracts & Error Boundaries', async (t) => {
         }
     });
 
-    await t.test('22. User action with isPostStabilization metadata in WorkerEmulatorClient must not be suppressed', async () => {
+    await t.test('16. User action with isPostStabilization metadata in WorkerEmulatorClient must not be suppressed', async () => {
         const client = new WorkerEmulatorClient();
         try {
             await client.loadROM(romPath);
@@ -530,6 +350,28 @@ test('Contracts & Error Boundaries', async (t) => {
             // @ts-expect-error Testing invalid batch read type
             emulator.core.readBatch([{ address: 0x100, type: 'invalid_type' }]);
         }, /Unsupported batch read type/i);
+
+        await emulator.close();
+    });
+
+    await t.test('26. stepSequence must properly release button during releaseFrames on consecutive presses', async () => {
+        const emulator = new MgbaEmulator();
+        const keysPerFrame: number[] = [];
+        emulator.registerPlugin({
+            name: 'key-tracker',
+            onFrame: (data) => {
+                keysPerFrame.push(data.currentKeys);
+            },
+        });
+        await emulator.loadROM(romPath);
+
+        await emulator.stepSequence([
+            { type: 'press', button: 'A', holdFrames: 2, releaseFrames: 2 },
+            { type: 'press', button: 'A', holdFrames: 2, releaseFrames: 2 },
+        ], { postStabilizationFrames: 0 });
+
+        // Expected pattern: hold 2 frames (1, 1), release 2 frames (0, 0), hold 2 frames (1, 1), release 2 frames (0, 0)
+        assert.deepEqual(keysPerFrame, [1, 1, 0, 0, 1, 1, 0, 0]);
 
         await emulator.close();
     });

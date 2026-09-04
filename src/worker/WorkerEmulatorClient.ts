@@ -757,6 +757,13 @@ export class WorkerEmulatorClient extends EventEmitter {
     }
 
     /**
+     * Sets the persistent manual button keymask inside the worker thread.
+     */
+    public async setKeyMask(mask: number): Promise<void> {
+        return this.sendRequest<void>({ type: 'setKeyMask', mask });
+    }
+
+    /**
      * Enqueues an input action sequence for autonomous execution inside the worker thread actor.
      */
     public enqueueSequence(

@@ -150,6 +150,28 @@ const state = await pokemon.getState();
 console.log(state.player.position, state.party);
 ```
 
+### Real-Time Emulation & Autonomous Agent Loops
+```typescript
+import { EmulatorController, GB_FPS } from 'node-mgba';
+
+// Launch autonomous 59.73 FPS real-time execution in a worker actor
+const controller = new EmulatorController({
+    romPath: './game.gb',
+    realtime: true,
+    fps: GB_FPS,
+});
+
+await controller.initialize();
+
+// Send interactive key inputs or enqueue AI button presses
+await controller.pressButtons(['START']);
+
+// Stream 60 FPS video frames
+controller.on('frame', (frame) => {
+    // Handle VideoPacket (RGBA pixel buffer)
+});
+```
+
 ---
 
 ## Performance
@@ -220,8 +242,11 @@ pnpm run gui:dev
 | `node-mgba/testing` | In-memory `MockMemoryReader` for unit testing decoders |
 | `node-mgba/browser` | Browser media playback helpers (`WebAudioPlayer`, `CanvasRenderer`) |
 
-For detailed guides:
+## Documentation
+
+- [Real-Time Emulation & Autonomous Agents](docs/REALTIME_LOOP.md)
 - [Plugin Authoring Guide](docs/PLUGINS.md)
 - [Binary Schema DSL Reference](docs/SCHEMA_DSL.md)
 - [In-Memory Decoder Testing](docs/TESTING.md)
 - [Performance & Benchmarks](docs/BENCHMARKS.md)
+

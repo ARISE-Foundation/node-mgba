@@ -88,13 +88,10 @@ export {
     type ActionStepResult,
 } from './core/ActionQueueStepPlanner.js';
 export {
-    RealtimeEmulationLoop,
-    type RealtimeEmulationLoopOptions,
-    type SteppableEmulator,
     GB_FPS,
     GB_FRAME_DURATION_MS,
     GB_AUDIO_SAMPLE_RATE,
-} from './core/RealtimeEmulationLoop.js';
+} from './types/InputAction.js';
 export {
     EmulatorController,
     type EmulatorControllerOptions,

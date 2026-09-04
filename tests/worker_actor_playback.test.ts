@@ -4,6 +4,7 @@ import { MessageChannel } from 'node:worker_threads';
 import {
     WorkerEmulatorClient,
     EmulatorController,
+    KEY_MASKS,
     press,
     wait,
 } from '../src/index.js';
@@ -319,6 +320,58 @@ test('Worker Actor Autonomous Playback & Frame Transaction Suite', { concurrency
             const ep0 = epochs[0];
             const ep1 = epochs[1];
             assert.ok(ep0 !== undefined && ep1 !== undefined && ep0 < ep1, `Expected monotonically increasing epochs: ${epochs.join(', ')}`);
+        } finally {
+            await client.pausePlayback().catch(() => {});
+            await client.close();
+        }
+    });
+
+    await t.test('12. setKeyMask updates manualMask during autonomous playback and validates input', async () => {
+        const client = new WorkerEmulatorClient();
+        try {
+            await client.loadROM(romPath);
+            await client.startPlayback(GB_FPS_TEST);
+
+            // Valid keymask setting
+            await client.setKeyMask(KEY_MASKS.A);
+            await client.setKeyMask(KEY_MASKS.A | KEY_MASKS.START);
+            await client.setKeyMask(0);
+
+            // Invalid keymask values must reject
+            await assert.rejects(
+                () => client.setKeyMask(-1),
+                (err: Error) => err.message.includes('Invalid keyMask'),
+            );
+            await assert.rejects(
+                () => client.setKeyMask(1.5),
+                (err: Error) => err.message.includes('Invalid keyMask'),
+            );
+            await assert.rejects(
+                () => client.setKeyMask(0x1000),
+                (err: Error) => err.message.includes('Invalid keyMask'),
+            );
+        } finally {
+            await client.pausePlayback().catch(() => {});
+            await client.close();
+        }
+    });
+
+    await t.test('13. Paused setKeyMask retains keyMask when autonomous playback resumes', async () => {
+        const client = new WorkerEmulatorClient();
+        try {
+            await client.loadROM(romPath);
+            // Client is paused initially
+            await client.setKeyMask(KEY_MASKS.B);
+
+            const frames: VideoPacket[] = [];
+            client.on('videoFrame', (f) => frames.push(f));
+
+            await client.startPlayback(GB_FPS_TEST);
+            await new Promise((r) => setTimeout(r, 150));
+            await client.pausePlayback();
+
+            assert.ok(frames.length >= 2, `Expected frames during playback, got ${frames.length}`);
+            await client.setKeyMask(0);
         } finally {
             await client.pausePlayback().catch(() => {});
             await client.close();

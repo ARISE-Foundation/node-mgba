@@ -4,8 +4,7 @@ import path from 'node:path';
 import { Buffer } from 'node:buffer';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
-    WorkerEmulatorClient,
-    RealtimeEmulationLoop,
+    EmulatorController,
     WebSocketMediaSink,
     KEY_MASKS,
     type VideoPacket,
@@ -61,30 +60,6 @@ async function main() {
     if (!fs.existsSync(absoluteRomPath)) {
         console.error(`[node-mgba GUI] Error: ROM file not found at: ${absoluteRomPath}`);
         process.exit(1);
-    }
-
-    console.log(`[node-mgba GUI] Loading ROM in Worker Thread: ${romPath}`);
-    const emulator = new WorkerEmulatorClient();
-    let romInfo: RomInfo;
-
-    try {
-        romInfo = await emulator.loadROM(absoluteRomPath);
-        console.log(`[node-mgba GUI] Loaded ${romInfo.title} (${romInfo.platform})`);
-    } catch (err) {
-        console.error(`[node-mgba GUI] Failed to load ROM:`, err);
-        process.exit(1);
-    }
-
-    async function getGameState(): Promise<PokemonRedBlueState | undefined> {
-        try {
-            const obs = await emulator.observe({ memory: { vram: true } });
-            if (obs.memory) {
-                return PokemonRedBluePlugin.decode(obs.memory);
-            }
-        } catch (err) {
-            console.warn('[node-mgba GUI] Failed to decode game state:', err);
-        }
-        return undefined;
     }
 
     // HTTP Server for serving Vue SPA static bundle
@@ -160,7 +135,30 @@ async function main() {
             return true;
         },
     });
-    emulator.useMediaSink(wsMediaSink);
+
+    console.log(`[node-mgba GUI] Initializing EmulatorController in Worker Thread: ${romPath}`);
+    const controller = new EmulatorController({
+        romPath: absoluteRomPath,
+        realtime: true,
+        fps: 60,
+        mediaSinks: [wsMediaSink],
+    });
+
+    async function getGameState(): Promise<PokemonRedBlueState | undefined> {
+        try {
+            const obs = await controller.observe({ memory: { vram: true } });
+            if (obs.memory) {
+                return PokemonRedBluePlugin.decode(obs.memory);
+            }
+        } catch (err) {
+            console.warn('[node-mgba GUI] Failed to decode game state:', err);
+        }
+        return undefined;
+    }
+
+    let lastFrameTime = performance.now();
+    let measuredFps = 60;
+    let isObservingGameState = false;
 
     function getFramePayload(frame: VideoPacket, gameState?: PokemonRedBlueState, fps?: number): FramePayload {
         return {
@@ -170,7 +168,7 @@ async function main() {
             frameIndex: frame.frameIndex,
             bufferBase64: frame.buffer.toString('base64'),
             gameState,
-            fps: fps ?? playback.currentFps,
+            fps: fps ?? measuredFps,
         };
     }
 
@@ -195,18 +193,42 @@ async function main() {
         }
     }
 
-    // Standard real-time frame scheduler
-    const playback = new RealtimeEmulationLoop(emulator, {
-        getKeyMask: () => activeKeyMask,
-        async onFrame(frame: VideoPacket) {
-            latestFrame = frame;
-            cachedGameState = await getGameState();
-            broadcast(getFramePayload(frame, cachedGameState, playback.currentFps));
-        },
+    controller.on('frame', (frame: VideoPacket) => {
+        latestFrame = frame;
+        const now = performance.now();
+        const delta = now - lastFrameTime;
+        lastFrameTime = now;
+        if (delta > 0) {
+            measuredFps = 1000 / delta;
+        }
+
+        if (!isObservingGameState) {
+            isObservingGameState = true;
+            getGameState()
+                .then((state) => {
+                    if (state) {
+                        cachedGameState = state;
+                    }
+                })
+                .finally(() => {
+                    isObservingGameState = false;
+                });
+        }
+
+        broadcast(getFramePayload(frame, cachedGameState, measuredFps));
     });
 
-    playback.on('start', () => broadcast({ type: 'loopStatus', isLooping: true }));
-    playback.on('pause', () => broadcast({ type: 'loopStatus', isLooping: false }));
+    controller.on('start', () => broadcast({ type: 'loopStatus', isLooping: true }));
+    controller.on('pause', () => broadcast({ type: 'loopStatus', isLooping: false }));
+
+    let romInfo: RomInfo;
+    try {
+        romInfo = await controller.initialize();
+        console.log(`[node-mgba GUI] Loaded ${romInfo.title} (${romInfo.platform})`);
+    } catch (err) {
+        console.error(`[node-mgba GUI] Failed to load ROM:`, err);
+        process.exit(1);
+    }
 
     let commandQueue: Promise<void> = Promise.resolve();
 
@@ -228,8 +250,8 @@ async function main() {
 
             console.log('[node-mgba GUI] Client connected');
 
-            if (!playback.isRunning) {
-                playback.start();
+            if (!controller.isPlaybackRunning()) {
+                await controller.startPlayback();
             }
 
             cachedGameState = await getGameState();
@@ -239,7 +261,7 @@ async function main() {
                 romInfo,
                 frame: initialFrame,
                 gameState: initialFrame.gameState,
-                isLooping: playback.isRunning,
+                isLooping: controller.isPlaybackRunning(),
             }));
         });
 
@@ -256,7 +278,7 @@ async function main() {
                             romInfo,
                             frame: getFramePayload(latestFrame, cachedGameState),
                             gameState: cachedGameState,
-                            isLooping: playback.isRunning,
+                            isLooping: controller.isPlaybackRunning(),
                         }));
                         break;
                     }
@@ -267,9 +289,10 @@ async function main() {
                             const mask = KEY_MASKS[btn];
                             if (mask !== undefined) {
                                 activeKeyMask |= mask;
+                                await controller.setKeyMask(activeKeyMask);
 
-                                if (!playback.isRunning) {
-                                    latestFrame = await emulator.step(4, activeKeyMask);
+                                if (!controller.isPlaybackRunning()) {
+                                    latestFrame = await controller.step(4, activeKeyMask);
                                     cachedGameState = await getGameState();
                                     broadcast(getFramePayload(latestFrame, cachedGameState));
                                 }
@@ -284,9 +307,10 @@ async function main() {
                             const mask = KEY_MASKS[btn];
                             if (mask !== undefined) {
                                 activeKeyMask &= ~mask;
+                                await controller.setKeyMask(activeKeyMask);
 
-                                if (!playback.isRunning) {
-                                    latestFrame = await emulator.step(4, activeKeyMask);
+                                if (!controller.isPlaybackRunning()) {
+                                    latestFrame = await controller.step(4, activeKeyMask);
                                     cachedGameState = await getGameState();
                                     broadcast(getFramePayload(latestFrame, cachedGameState));
                                 }
@@ -296,25 +320,25 @@ async function main() {
                     }
 
                     case 'step': {
-                        const wasRunning = playback.isRunning;
-                        if (wasRunning) await playback.pause();
+                        const wasRunning = controller.isPlaybackRunning();
+                        if (wasRunning) await controller.pausePlayback();
                         try {
                             const frames = msg.frames ?? 1;
-                            latestFrame = await emulator.step(frames, activeKeyMask);
+                            latestFrame = await controller.step(frames, activeKeyMask);
                             cachedGameState = await getGameState();
                             broadcast(getFramePayload(latestFrame, cachedGameState));
                         } finally {
-                            if (wasRunning) playback.start();
+                            if (wasRunning) await controller.startPlayback();
                         }
                         break;
                     }
 
                     case 'stepSequence': {
                         if (msg.actions && Array.isArray(msg.actions)) {
-                            const wasRunning = playback.isRunning;
-                            if (wasRunning) await playback.pause();
+                            const wasRunning = controller.isPlaybackRunning();
+                            if (wasRunning) await controller.pausePlayback();
                             try {
-                                const result = await emulator.stepSequence(
+                                const result = await controller.controls.sequence(
                                     msg.actions,
                                     { postStabilizationFrames: 16 },
                                 );
@@ -353,7 +377,7 @@ async function main() {
                                 });
                             } finally {
                                 if (wasRunning) {
-                                    playback.start();
+                                    await controller.startPlayback();
                                 }
                             }
                         }
@@ -361,36 +385,34 @@ async function main() {
                     }
 
                     case 'startLoop': {
-                        if (msg.fps && msg.fps > 0) {
-                            playback.fps = msg.fps;
-                        }
-                        playback.start();
+                        await controller.startPlayback(msg.fps);
                         break;
                     }
 
                     case 'stopLoop': {
-                        await playback.pause();
+                        await controller.pausePlayback();
                         break;
                     }
 
                     case 'reset': {
-                        const wasRunning = playback.isRunning;
-                        if (wasRunning) await playback.pause();
+                        const wasRunning = controller.isPlaybackRunning();
+                        if (wasRunning) await controller.pausePlayback();
                         try {
-                            await emulator.reset();
+                            await controller.reset();
                             activeKeyMask = 0;
-                            latestFrame = await emulator.step(120);
+                            await controller.setKeyMask(0);
+                            latestFrame = await controller.step(120);
                             const state = await getGameState();
                             broadcast(getFramePayload(latestFrame, state));
                         } finally {
-                            if (wasRunning) playback.start();
+                            if (wasRunning) await controller.startPlayback();
                         }
                         break;
                     }
 
                     case 'saveState': {
                         const targetPath = msg.filePath ? path.resolve(msg.filePath) : STATE_FILE;
-                        const ok = await emulator.saveState(targetPath);
+                        const ok = await controller.saveState(targetPath);
                         console.log(`[node-mgba GUI] Save state to ${targetPath}: ${ok ? 'SUCCESS' : 'FAILED'}`);
                         ws.send(JSON.stringify({
                             type: 'toast',
@@ -410,13 +432,14 @@ async function main() {
                             }));
                             break;
                         }
-                        const wasRunning = playback.isRunning;
-                        if (wasRunning) await playback.pause();
+                        const wasRunning = controller.isPlaybackRunning();
+                        if (wasRunning) await controller.pausePlayback();
                         try {
-                            const ok = await emulator.loadState(targetPath);
+                            const ok = await controller.loadState(targetPath);
                             console.log(`[node-mgba GUI] Load state from ${targetPath}: ${ok ? 'SUCCESS' : 'FAILED'}`);
                             if (ok) {
-                                latestFrame = await emulator.step(1);
+                                await controller.setKeyMask(activeKeyMask);
+                                latestFrame = await controller.step(1);
                                 cachedGameState = await getGameState();
                                 broadcast(getFramePayload(latestFrame, cachedGameState));
                                 ws.send(JSON.stringify({
@@ -432,7 +455,7 @@ async function main() {
                                 }));
                             }
                         } finally {
-                            if (wasRunning) playback.start();
+                            if (wasRunning) await controller.startPlayback();
                         }
                         break;
                     }
@@ -440,16 +463,17 @@ async function main() {
                     case 'uploadState': {
                         if (msg.stateBase64) {
                             const buffer = Buffer.from(msg.stateBase64, 'base64');
-                            const filename = msg.filename ?? 'uploaded_state.state';
+                            const filename = path.basename(msg.filename ?? 'uploaded_state.state');
                             const targetPath = path.join('/tmp', filename);
                             fs.writeFileSync(targetPath, buffer);
 
-                            const wasRunning = playback.isRunning;
-                            if (wasRunning) await playback.pause();
+                            const wasRunning = controller.isPlaybackRunning();
+                            if (wasRunning) await controller.pausePlayback();
                             try {
-                                const ok = await emulator.loadState(targetPath);
+                                const ok = await controller.loadState(targetPath);
                                 if (ok) {
-                                    latestFrame = await emulator.step(1);
+                                    await controller.setKeyMask(activeKeyMask);
+                                    latestFrame = await controller.step(1);
                                     const state = await getGameState();
                                     broadcast(getFramePayload(latestFrame, state));
                                     ws.send(JSON.stringify({
@@ -465,7 +489,7 @@ async function main() {
                                     }));
                                 }
                             } finally {
-                                if (wasRunning) playback.start();
+                                if (wasRunning) await controller.startPlayback();
                             }
                         }
                         break;
@@ -517,12 +541,16 @@ async function main() {
         ws.on('close', () => {
             unmutedClients.delete(ws);
             console.log('[node-mgba GUI] Client disconnected');
+            if (wss.clients.size === 0 && activeKeyMask !== 0) {
+                activeKeyMask = 0;
+                void controller.setKeyMask(0).catch(() => {});
+            }
         });
     });
 
     server.listen(PORT, () => {
         console.log(`\n🎮 [node-mgba Studio] Test GUI server running at: http://localhost:${PORT}`);
-        console.log(`🎮 Powered by WorkerEmulatorClient (Worker Thread Isolation).\n`);
+        console.log(`🎮 Powered by EmulatorController (Worker Thread Isolation).\n`);
     });
 }
 

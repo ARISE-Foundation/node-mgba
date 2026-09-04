@@ -49,6 +49,10 @@ describe('EmulatorController Lifecycle & DX Suite', { skip: !hasTestRom() }, () 
                 (err: unknown) => err instanceof LifecycleError && err.message.includes('clearButtons'),
             );
             await assert.rejects(
+                () => controller.setKeyMask(1),
+                (err: unknown) => err instanceof LifecycleError && err.message.includes('setKeyMask'),
+            );
+            await assert.rejects(
                 () => controller.sliceMemory(0xC000, 10),
                 (err: unknown) => err instanceof LifecycleError && err.message.includes('sliceMemory'),
             );
@@ -317,5 +321,52 @@ describe('EmulatorController Lifecycle & DX Suite', { skip: !hasTestRom() }, () 
             (err: unknown) => err instanceof LifecycleError && err.message.includes('closed'),
         );
         channel.port1.close();
+    });
+
+    it('9. setKeyMask delegates to worker and clearButtons resets keyMask', async () => {
+        const controller = new EmulatorController({ romPath: ROM_PATH, realtime: false });
+        try {
+            await controller.initialize();
+            assert.equal(controller.state, 'ready');
+
+            await controller.setKeyMask(0x01);
+            await controller.clearButtons();
+        } finally {
+            await controller.close();
+        }
+    });
+
+    it('10. startPlayback and pausePlayback emit start and pause transition events', async () => {
+        const controller = new EmulatorController({ romPath: ROM_PATH, realtime: false });
+        try {
+            await controller.initialize();
+            assert.equal(controller.state, 'ready');
+
+            const events: string[] = [];
+            const frames: unknown[] = [];
+            controller.on('start', () => events.push('start'));
+            controller.on('pause', () => events.push('pause'));
+            controller.on('frame', (f) => frames.push(f));
+
+            await controller.startPlayback(60);
+            assert.equal(controller.isPlaybackRunning(), true);
+
+            // Redundant startPlayback should be idempotent and not emit duplicate event
+            await controller.startPlayback(60);
+
+            // Wait for frames to stream from worker
+            await new Promise((r) => setTimeout(r, 120));
+
+            await controller.pausePlayback();
+            assert.equal(controller.isPlaybackRunning(), false);
+
+            // Redundant pausePlayback should be idempotent and not emit duplicate event
+            await controller.pausePlayback();
+
+            assert.deepEqual(events, ['start', 'pause']);
+            assert.ok(frames.length >= 2, `Expected frame events when starting playback from non-realtime controller, got ${frames.length}`);
+        } finally {
+            await controller.close();
+        }
     });
 });

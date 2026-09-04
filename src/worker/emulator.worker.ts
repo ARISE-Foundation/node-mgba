@@ -1,14 +1,15 @@
 import { parentPort, type MessagePort } from 'node:worker_threads';
 import { MgbaEmulator } from '../core/MgbaEmulator.js';
-import { GB_FPS } from '../core/RealtimeEmulationLoop.js';
 import { PcmS16StereoResampler } from '../sinks/ResamplingMediaSink.js';
 import {
+    GB_FPS,
     validateInputAction,
     validateStepSequenceOptions,
     type InputAction,
 } from '../types/InputAction.js';
 import {
     compileSequenceActions,
+    ALL_VALID_BUTTON_BITS,
 } from '../core/InputActionCompiler.js';
 import {
     planNextActionStep,
@@ -850,6 +851,15 @@ async function processRequest(req: WorkerRequest): Promise<void> {
                     clearTimeout(playbackTimer);
                     playbackTimer = null;
                 }
+                postWorkerResponse(req.id, true, undefined);
+                break;
+            }
+            case 'setKeyMask': {
+                const mask = req.mask;
+                if (!Number.isInteger(mask) || mask < 0 || (mask & ~ALL_VALID_BUTTON_BITS) !== 0) {
+                    throw new TypeError(`Invalid keyMask: ${mask}. Expected non-negative integer within valid button bitmasks.`);
+                }
+                manualMask = mask;
                 postWorkerResponse(req.id, true, undefined);
                 break;
             }

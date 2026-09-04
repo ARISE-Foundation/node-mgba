@@ -257,10 +257,10 @@ export class EmulatorController extends EventEmitter {
                 this.romInfo = romInfo;
                 this.instanceValue = new MgbaInstance(this.clientInstance, romInfo);
 
-                if (this.isRealtime) {
-                    this.clientInstance.on('videoFrame', this.onVideoFrame);
-                    this.clientInstance.on('error', this.onClientError);
+                this.clientInstance.on('videoFrame', this.onVideoFrame);
+                this.clientInstance.on('error', this.onClientError);
 
+                if (this.isRealtime) {
                     this.desiredPlaybackState = 'playing';
                     await this.clientInstance.startPlayback(this.targetFps);
                 }
@@ -270,6 +270,9 @@ export class EmulatorController extends EventEmitter {
                 }
 
                 this.currentState = 'ready';
+                if (this.isRealtime) {
+                    this.emit('start');
+                }
                 return romInfo;
             } catch (err) {
                 this.currentState = 'closed';
@@ -328,18 +331,35 @@ export class EmulatorController extends EventEmitter {
         if (fps && fps > 0 && Number.isFinite(fps)) {
             this.targetFps = fps;
         }
+        const client = this.getActiveClient('startPlayback');
+        if (this.clientInstance && !this.clientInstance.listeners('videoFrame').includes(this.onVideoFrame)) {
+            this.clientInstance.on('videoFrame', this.onVideoFrame);
+        }
+        if (this.clientInstance && !this.clientInstance.listeners('error').includes(this.onClientError)) {
+            this.clientInstance.on('error', this.onClientError);
+        }
+        await client.startPlayback(this.targetFps);
+        const wasRunning = this.desiredPlaybackState === 'playing';
         this.desiredPlaybackState = 'playing';
-        if (this.clientInstance) {
-            await this.clientInstance.startPlayback(this.targetFps);
+        if (!wasRunning) {
+            this.emit('start');
         }
     }
 
     public async pausePlayback(): Promise<void> {
         this.assertReady('pausePlayback');
+        const client = this.getActiveClient('pausePlayback');
+        await client.pausePlayback();
+        const wasRunning = this.desiredPlaybackState === 'playing';
         this.desiredPlaybackState = 'paused';
-        if (this.clientInstance) {
-            await this.clientInstance.pausePlayback();
+        if (wasRunning) {
+            this.emit('pause');
         }
+    }
+
+    public async setKeyMask(mask: number): Promise<void> {
+        const client = this.getActiveClient('setKeyMask');
+        return client.setKeyMask(mask);
     }
 
     public executeSequence(
@@ -381,6 +401,7 @@ export class EmulatorController extends EventEmitter {
     public async clearButtons(): Promise<void> {
         const client = this.getActiveClient('clearButtons');
         await client.clearActionQueue();
+        await client.setKeyMask(0);
     }
 
     public async observe(options: {
