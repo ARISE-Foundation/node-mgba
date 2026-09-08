@@ -692,21 +692,74 @@ bool mgba_save_state(mgba_handle_t* handle, const char* filepath) {
     return false;
 }
 
+static void restore_screenshot_if_available(mgba_handle_t* handle, struct VFile* vf) {
+    if (!handle || !handle->core || !handle->video_buffer || !vf) return;
+
+    vf->seek(vf, 0, SEEK_SET);
+    struct mStateExtdata extdata;
+    mStateExtdataInit(&extdata);
+    if (mCoreExtractExtdata(handle->core, vf, &extdata)) {
+        struct mStateExtdataItem ssItem;
+        struct mStateExtdataItem dimItem;
+        bool hasSs = mStateExtdataGet(&extdata, EXTDATA_SCREENSHOT, &ssItem);
+        bool hasDims = mStateExtdataGet(&extdata, EXTDATA_SCREENSHOT_DIMENSIONS, &dimItem);
+
+        if (hasSs && ssItem.data && ssItem.size > 0) {
+            unsigned src_w = 0, src_h = 0;
+            if (hasDims && dimItem.data && dimItem.size >= 4) {
+                const uint16_t* dims = (const uint16_t*) dimItem.data;
+                src_w = dims[0];
+                src_h = dims[1];
+            } else {
+                uint8_t header[24];
+                vf->seek(vf, 0, SEEK_SET);
+                if (vf->read(vf, header, 24) == 24 &&
+                    header[0] == 0x89 && header[1] == 'P' && header[2] == 'N' && header[3] == 'G' &&
+                    header[4] == 0x0D && header[5] == 0x0A && header[6] == 0x1A && header[7] == 0x0A) {
+                    src_w = ((unsigned) header[16] << 24) | ((unsigned) header[17] << 16) | ((unsigned) header[18] << 8) | header[19];
+                    src_h = ((unsigned) header[20] << 24) | ((unsigned) header[21] << 16) | ((unsigned) header[22] << 8) | header[23];
+                } else if (ssItem.size == (int32_t) (handle->width * handle->height * sizeof(uint32_t))) {
+                    src_w = handle->width;
+                    src_h = handle->height;
+                }
+            }
+
+            if (src_w > 0 && src_h > 0 && ssItem.size >= (int32_t) (src_w * src_h * sizeof(uint32_t))) {
+                const uint32_t* src = (const uint32_t*) ssItem.data;
+                if (src_w == handle->width && src_h == handle->height) {
+                    for (size_t i = 0; i < (size_t) handle->width * handle->height; i++) {
+                        handle->video_buffer[i] = src[i] | 0xFF000000u;
+                    }
+                } else {
+                    for (unsigned y = 0; y < handle->height; ++y) {
+                        unsigned sy = (y * src_h) / handle->height;
+                        for (unsigned x = 0; x < handle->width; ++x) {
+                            unsigned sx = (x * src_w) / handle->width;
+                            handle->video_buffer[y * handle->width + x] = src[sy * src_w + sx] | 0xFF000000u;
+                        }
+                    }
+                }
+            }
+        }
+        mStateExtdataDeinit(&extdata);
+    }
+}
+
 bool mgba_load_state(mgba_handle_t* handle, const char* filepath) {
     if (!handle || !handle->core || !filepath) return false;
 
     struct VFile* vf = VFileOpen(filepath, O_RDONLY);
     if (!vf) return false;
 
-    bool success = mCoreLoadStateNamed(handle->core, vf, SAVESTATE_ALL);
-    vf->close(vf);
-
+    bool success = mCoreLoadStateNamed(handle->core, vf, SAVESTATE_ALL & ~SAVESTATE_SCREENSHOT);
     if (success) {
+        restore_screenshot_if_available(handle, vf);
         struct mAudioBuffer* buf = handle->core->getAudioBuffer(handle->core);
         if (buf) {
             mAudioBufferClear(buf);
         }
     }
+    vf->close(vf);
 
     return success;
 }
@@ -738,15 +791,16 @@ bool mgba_load_state_buffer(mgba_handle_t* handle, const uint8_t* in_buffer, siz
     struct VFile* vf = VFileFromConstMemory(in_buffer, size);
     if (!vf) return false;
 
-    bool success = mCoreLoadStateNamed(handle->core, vf, SAVESTATE_ALL);
-    vf->close(vf);
-
+    bool success = mCoreLoadStateNamed(handle->core, vf, SAVESTATE_ALL & ~SAVESTATE_SCREENSHOT);
     if (success) {
+        restore_screenshot_if_available(handle, vf);
         struct mAudioBuffer* buf = handle->core->getAudioBuffer(handle->core);
         if (buf) {
             mAudioBufferClear(buf);
         }
     }
+    vf->close(vf);
+
     return success;
 }
 

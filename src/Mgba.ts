@@ -212,8 +212,8 @@ export class MgbaInstance extends EventEmitter {
         return {
             frame: async (): Promise<VideoPacket> => {
                 const obs = await this.client.observe({ screen: true });
-                const width = obs.width ?? (this.console.model === 'AGB' ? 240 : 160);
-                const height = obs.height ?? (this.console.model === 'AGB' ? 160 : 144);
+                const width = obs.width ?? this.console.width;
+                const height = obs.height ?? this.console.height;
                 return {
                     frameIndex: obs.frameIndex,
                     pts: obs.frameIndex / (262144 / 4389),
@@ -226,8 +226,8 @@ export class MgbaInstance extends EventEmitter {
 
             toPng: async (): Promise<Buffer> => {
                 const obs = await this.client.observe({ screen: true });
-                const width = obs.width ?? (this.console.model === 'AGB' ? 240 : 160);
-                const height = obs.height ?? (this.console.model === 'AGB' ? 160 : 144);
+                const width = obs.width ?? this.console.width;
+                const height = obs.height ?? this.console.height;
                 const rawBuffer = obs.screenBuffer ?? Buffer.alloc(width * height * 4);
 
                 return sharp(rawBuffer, {
@@ -239,8 +239,8 @@ export class MgbaInstance extends EventEmitter {
 
             crop: async (box: { x: number; y: number; width: number; height: number; scale?: number }, format: 'png' | 'raw' = 'png'): Promise<Buffer> => {
                 const obs = await this.client.observe({ screen: true });
-                const width = obs.width ?? (this.console.model === 'AGB' ? 240 : 160);
-                const height = obs.height ?? (this.console.model === 'AGB' ? 160 : 144);
+                const width = obs.width ?? this.console.width;
+                const height = obs.height ?? this.console.height;
                 const rawBuffer = obs.screenBuffer ?? Buffer.alloc(width * height * 4);
 
                 const clampedX = Math.max(0, Math.min(box.x, width - 1));
@@ -272,8 +272,8 @@ export class MgbaInstance extends EventEmitter {
 
             toWebp: async (options: { quality?: number } = {}): Promise<Buffer> => {
                 const obs = await this.client.observe({ screen: true });
-                const width = obs.width ?? (this.console.model === 'AGB' ? 240 : 160);
-                const height = obs.height ?? (this.console.model === 'AGB' ? 160 : 144);
+                const width = obs.width ?? this.console.width;
+                const height = obs.height ?? this.console.height;
                 const rawBuffer = obs.screenBuffer ?? Buffer.alloc(width * height * 4);
 
                 return sharp(rawBuffer, {

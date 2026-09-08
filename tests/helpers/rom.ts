@@ -71,3 +71,46 @@ export function getTestRom(): RomValidationResult {
 export function getTestRomPath(): string {
     return getTestRom().path;
 }
+
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+function resolveFixturePath(filename: string): string {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const cand1 = path.resolve(__dirname, '../../../fixtures', filename);
+    if (fs.existsSync(cand1)) return cand1;
+    const cand2 = path.resolve(__dirname, '../../fixtures', filename);
+    if (fs.existsSync(cand2)) return cand2;
+    return cand1;
+}
+
+export function hasGbaTestRom(): boolean {
+    const fixtureRom = resolveFixturePath('super_mario_bros.gba');
+    const romPath = process.env['GBA_ROM_PATH'] || fixtureRom;
+    return fs.existsSync(romPath);
+}
+
+export function getGbaTestRomPath(): string {
+    const fixtureRom = resolveFixturePath('super_mario_bros.gba');
+    const romPath = process.env['GBA_ROM_PATH'] || fixtureRom;
+    if (!fs.existsSync(romPath)) {
+        throw new Error(`Specified GBA ROM file does not exist at path: "${romPath}"`);
+    }
+    return romPath;
+}
+
+export function hasGbaSavestate(): boolean {
+    const fixtureSs = resolveFixturePath('super_mario_bros.ss0');
+    const ssPath = process.env['GBA_SAVESTATE_PATH'] || fixtureSs;
+    return fs.existsSync(ssPath);
+}
+
+export function getGbaSavestatePath(): string {
+    const fixtureSs = resolveFixturePath('super_mario_bros.ss0');
+    const ssPath = process.env['GBA_SAVESTATE_PATH'] || fixtureSs;
+    if (!fs.existsSync(ssPath)) {
+        throw new Error(`Specified GBA savestate does not exist at path: "${ssPath}"`);
+    }
+    return ssPath;
+}
+

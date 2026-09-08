@@ -208,7 +208,7 @@ test('Contracts & Error Boundaries', async (t) => {
 
         // expandButtonsToInputActions rejects non-object inputs
         assert.throws(() => {
-            expandButtonsToInputActions(['a'] as any);
+            expandButtonsToInputActions(['a'] as unknown as Parameters<typeof expandButtonsToInputActions>[0]);
         }, /Invalid button action/i);
 
         // Numeric button bitmasks are strictly validated (0..0x3FF)
