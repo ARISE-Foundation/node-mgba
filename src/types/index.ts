@@ -31,6 +31,7 @@ export type {
     SequenceExecutionResult,
     SequenceHandle,
     PressButtonsOptions,
+    ButtonActionItem,
 } from './InputAction.js';
 export {
     GB_FPS,

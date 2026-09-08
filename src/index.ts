@@ -91,6 +91,7 @@ export {
     GB_FPS,
     GB_FRAME_DURATION_MS,
     GB_AUDIO_SAMPLE_RATE,
+    type ButtonActionItem,
 } from './types/InputAction.js';
 export {
     EmulatorController,
@@ -126,6 +127,7 @@ export {
 } from './sinks/ResamplingMediaSink.js';
 export {
     encodeVideoPacket,
+    encodeKeyframe,
     type ImageEncodeOptions,
 } from './utils/imageEncoder.js';
 export type {
@@ -189,6 +191,7 @@ export {
     PokemonRedBluePlugin,
     isPokemonRedBlue,
     type PokemonRedBlueState,
+    type PokemonPartyMember,
     type MapObject,
     POKEMON_BLUE_SHA256,
 } from './plugins/pokemonRedBlue.js';

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MgbaEmulator, press, wait } from '../src/index.js';
+import { EmulatorController, encodeKeyframe, MgbaEmulator, press, wait } from '../src/index.js';
 import { getTestRomPath, hasTestRom } from './helpers/rom.js';
 
 test('Keyframe Pipeline & Action Anchor Invariants', async (t) => {
@@ -108,6 +108,38 @@ test('Keyframe Pipeline & Action Anchor Invariants', async (t) => {
                 );
             }
         }
+    });
+
+    await t.test('4. encodeKeyframe should produce valid PNG buffer', async () => {
+        const kf = emulator.collector.sampleFrame(emulator.core, { triggerReason: 'test_sample', force: true });
+        assert.ok(kf !== null);
+        const png = await encodeKeyframe(kf);
+        assert.ok(Buffer.isBuffer(png));
+        assert.ok(png.length > 0);
+        // PNG header magic bytes: 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
+        assert.deepEqual(
+            Array.from(png.subarray(0, 8)),
+            [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+        );
+    });
+
+    await t.test('5. EmulatorController executeSequence and pressButtons forward turnResult and keyframes', async () => {
+        const controller = new EmulatorController({
+            romPath,
+            realtime: false,
+        });
+        await controller.initialize();
+
+        const handle = controller.pressButtons([{ button: 'A', holdFrames: 8, releaseFrames: 4 }]);
+        const result = await handle.promise;
+
+        assert.ok(result.actionsExecuted > 0);
+        assert.ok(result.turnResult !== undefined, 'result.turnResult must be defined');
+        assert.ok(Array.isArray(result.keyframes), 'result.keyframes must be an array');
+        assert.ok(result.keyframes.length >= 2, 'Must capture at least pre_action and post_action');
+        assert.equal(result.keyframes[0].triggerReason, 'pre_action');
+
+        await controller.close();
     });
 
     emulator.close();

@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
 import sharp from 'sharp';
+import type { Keyframe } from '../types/Keyframe.js';
 import type { VideoPacket } from '../types/MediaSink.js';
 
 export interface ImageEncodeOptions {
@@ -7,6 +8,23 @@ export interface ImageEncodeOptions {
     readonly lossless?: boolean;
     readonly quality?: number;
     readonly effort?: number;
+}
+
+export async function encodeKeyframe(
+    keyframe: Keyframe,
+    options: ImageEncodeOptions = {},
+): Promise<Buffer> {
+    return encodeVideoPacket(
+        {
+            frameIndex: keyframe.frameIndex,
+            pts: keyframe.timestampMs,
+            width: keyframe.width,
+            height: keyframe.height,
+            strideBytes: keyframe.width * 4,
+            buffer: keyframe.buffer,
+        },
+        options,
+    );
 }
 
 export async function encodeVideoPacket(

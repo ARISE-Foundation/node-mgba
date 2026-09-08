@@ -10,6 +10,7 @@ import {
     validateStepSequenceOptions,
     type ExecuteSequenceOptions,
     type PressButtonsOptions,
+    type ButtonActionItem,
     type StepSequenceOptions,
     type SequenceHandle,
     type MediaSink,
@@ -378,9 +379,11 @@ export class EmulatorController extends EventEmitter {
             ...(options.releaseFrames !== undefined ? { releaseFrames: options.releaseFrames } : {}),
             ...(options.postStabilizationFrames !== undefined ? { postStabilizationFrames: options.postStabilizationFrames } : {}),
         };
-        const promise = client.stepSequence(actions, stepOpts).then(() => ({
+        const promise = client.stepSequence(actions, stepOpts).then((turnResult) => ({
             sequenceId,
             actionsExecuted: actions.length,
+            turnResult,
+            keyframes: turnResult.keyframes,
         }));
         return {
             sequenceId,
@@ -390,7 +393,7 @@ export class EmulatorController extends EventEmitter {
     }
 
     public pressButtons(
-        buttons: readonly string[],
+        buttons: readonly ButtonActionItem[],
         options: PressButtonsOptions = {},
     ): SequenceHandle {
         const validatedOptions = validateStepSequenceOptions(options);

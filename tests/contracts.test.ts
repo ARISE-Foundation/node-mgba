@@ -193,13 +193,23 @@ test('Contracts & Error Boundaries', async (t) => {
     await t.test('11. expandButtonsToInputActions and resolveButtonMask must normalize strings and strictly validate numeric masks', async () => {
         // expandButtonsToInputActions accepts lowercase and 'wait' keywords
         assert.doesNotThrow(() => {
-            expandButtonsToInputActions(['a', 'start', 'wait', 'LEFT']);
+            expandButtonsToInputActions([
+                { button: 'a' },
+                { button: 'start' },
+                { button: 'wait', holdFrames: 30 },
+                { button: 'LEFT', releaseFrames: 10 },
+            ]);
         });
 
         // expandButtonsToInputActions rejects unrecognized buttons
         assert.throws(() => {
-            expandButtonsToInputActions(['invalid_button']);
+            expandButtonsToInputActions([{ button: 'invalid_button' }]);
         }, /Unrecognized button/i);
+
+        // expandButtonsToInputActions rejects non-object inputs
+        assert.throws(() => {
+            expandButtonsToInputActions(['a'] as any);
+        }, /Invalid button action/i);
 
         // Numeric button bitmasks are strictly validated (0..0x3FF)
         for (const invalid of [-1, 0x400, NaN, 1.5, Infinity]) {

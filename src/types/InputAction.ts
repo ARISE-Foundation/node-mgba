@@ -1,3 +1,6 @@
+import type { Keyframe } from './Keyframe.js';
+import type { TurnResult } from './TurnResult.js';
+
 export const GB_FPS = 59.7275005696;
 export const GB_FRAME_DURATION_MS = 1000 / GB_FPS; // ~16.7426147 ms
 export const GB_AUDIO_SAMPLE_RATE = 131072;
@@ -19,6 +22,8 @@ export type StepSequenceOptions = ExecuteSequenceOptions;
 export interface SequenceExecutionResult {
     readonly sequenceId: number;
     readonly actionsExecuted: number;
+    readonly turnResult?: TurnResult | undefined;
+    readonly keyframes?: readonly Keyframe[] | undefined;
 }
 
 export interface SequenceHandle {
@@ -29,6 +34,12 @@ export interface SequenceHandle {
 
 export interface PressButtonsOptions extends ExecuteSequenceOptions {
     readonly waitFrames?: number | undefined;
+}
+
+export interface ButtonActionItem {
+    readonly button: string;
+    readonly holdFrames?: number | undefined;
+    readonly releaseFrames?: number | undefined;
 }
 
 export type ButtonName =

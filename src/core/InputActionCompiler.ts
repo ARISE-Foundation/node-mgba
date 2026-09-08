@@ -1,5 +1,6 @@
 import {
     type ButtonName,
+    type ButtonActionItem,
     type InputAction,
     type ExecuteSequenceOptions,
     type PressButtonsOptions,
@@ -25,7 +26,7 @@ export function resolveButtonMask(button: ButtonName | number | string): number 
         }
         return button;
     }
-    const canonical = normalizeButtonName(String(button));
+    const canonical = normalizeButtonName(button);
     const mask = BUTTON_BITMASKS[canonical];
     if (mask === undefined) {
         throw new Error(`Unknown canonical button: "${String(button)}"`);
@@ -34,22 +35,26 @@ export function resolveButtonMask(button: ButtonName | number | string): number 
 }
 
 /**
- * Expands a list of button strings (including 'WAIT') into structured InputAction objects.
+ * Expands a list of button action objects into structured InputAction objects.
  */
 export function expandButtonsToInputActions(
-    buttons: readonly string[],
+    buttons: readonly ButtonActionItem[],
     options: PressButtonsOptions = {},
 ): InputAction[] {
-    const hold = options.holdFrames ?? DEFAULT_HOLD_FRAMES;
-    const release = options.releaseFrames ?? DEFAULT_RELEASE_FRAMES;
+    const defaultHold = options.holdFrames ?? DEFAULT_HOLD_FRAMES;
+    const defaultRelease = options.releaseFrames ?? DEFAULT_RELEASE_FRAMES;
     const waitFrames = options.waitFrames ?? 0;
 
     const actions: InputAction[] = [];
-    for (const rawBtn of buttons) {
-        if (typeof rawBtn !== 'string') {
-            throw new Error(`Invalid button input: expected string, received ${typeof rawBtn}`);
+    for (const item of buttons) {
+        if (!item || typeof item !== 'object' || typeof item.button !== 'string') {
+            throw new Error(`Invalid button action: expected object with 'button' string property, received ${JSON.stringify(item)}`);
         }
-        const trimmed = rawBtn.trim();
+
+        const trimmed = item.button.trim();
+        const hold = item.holdFrames ?? defaultHold;
+        const release = item.releaseFrames ?? defaultRelease;
+
         if (trimmed.toUpperCase() === 'WAIT') {
             actions.push(wait(hold));
         } else {
