@@ -6,6 +6,7 @@
 #include <mgba/core/config.h>
 #include <mgba/core/serialize.h>
 #include <mgba/core/interface.h>
+#include <mgba/core/log.h>
 #include <mgba/internal/gb/gb.h>
 #include <mgba/internal/gb/memory.h>
 #include <mgba/internal/gb/video.h>
@@ -19,6 +20,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <stdarg.h>
 
 #define GB_BUS_ADDRESS_SPACE_LIMIT     0x10000u
 #define GBA_BUS_ADDRESS_SPACE_LIMIT    0x100000000ULL
@@ -27,6 +29,58 @@
 #define GB_WRAM_BANK_WINDOW_SIZE       0x1000u
 #define GB_VRAM_BANK_WINDOW_SIZE       0x2000u
 #define GB_SRAM_BANK_WINDOW_SIZE       0x2000u
+
+static int g_log_level_mask = mLOG_WARN | mLOG_ERROR | mLOG_FATAL;
+
+static void _mgba_shim_logger(struct mLogger* logger, int category, enum mLogLevel level, const char* format, va_list args) {
+    (void) logger;
+    if (!(level & g_log_level_mask)) {
+        return;
+    }
+    const char* level_name = "WARN";
+    if (level == mLOG_FATAL) {
+        level_name = "FATAL";
+    } else if (level == mLOG_ERROR) {
+        level_name = "ERROR";
+    }
+    const char* cat_name = mLogCategoryName(category);
+    if (!cat_name) {
+        cat_name = "Core";
+    }
+    fprintf(stderr, "[mgba %s] %s: ", level_name, cat_name);
+    vfprintf(stderr, format, args);
+    fprintf(stderr, "\n");
+}
+
+static struct mLogger g_shim_logger = {
+    .log = _mgba_shim_logger,
+    .filter = NULL
+};
+
+static void _init_mgba_logging_once(void) {
+    static bool s_initialized = false;
+    if (s_initialized) return;
+    s_initialized = true;
+
+    const char* env_level = getenv("MGBA_LOG_LEVEL");
+    if (env_level) {
+        if (strcmp(env_level, "silent") == 0 || strcmp(env_level, "none") == 0 || strcmp(env_level, "0") == 0) {
+            g_log_level_mask = 0;
+        } else if (strcmp(env_level, "fatal") == 0) {
+            g_log_level_mask = mLOG_FATAL;
+        } else if (strcmp(env_level, "error") == 0) {
+            g_log_level_mask = mLOG_ERROR | mLOG_FATAL;
+        } else if (strcmp(env_level, "warn") == 0) {
+            g_log_level_mask = mLOG_WARN | mLOG_ERROR | mLOG_FATAL;
+        } else if (strcmp(env_level, "info") == 0) {
+            g_log_level_mask = mLOG_WARN | mLOG_ERROR | mLOG_FATAL | mLOG_INFO;
+        } else if (strcmp(env_level, "debug") == 0 || strcmp(env_level, "all") == 0) {
+            g_log_level_mask = mLOG_ALL;
+        }
+    }
+    mLogSetDefaultLogger(&g_shim_logger);
+    mLogSetThreadLogger(&g_shim_logger);
+}
 
 struct mgba_handle {
     struct mCore* core;
@@ -39,6 +93,8 @@ struct mgba_handle {
 
 mgba_handle_t* mgba_open(const char* rom_path) {
     if (!rom_path) return NULL;
+
+    _init_mgba_logging_once();
 
     struct mCore* core = mCoreFind(rom_path);
     if (!core) return NULL;
