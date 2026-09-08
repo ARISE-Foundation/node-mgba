@@ -20,8 +20,9 @@ import {
     type ReadSpec,
     type MemoryRegionName,
     type MemorySnapshotOptions,
+    type HeldButtonStatus,
 } from '../types/index.js';
-import { expandButtonsToInputActions } from './InputActionCompiler.js';
+import { expandButtonsToInputActions, resolveButtonMask } from './InputActionCompiler.js';
 import {
     MgbaInstance,
     type MgbaScreenApi,
@@ -361,6 +362,45 @@ export class EmulatorController extends EventEmitter {
     public async setKeyMask(mask: number): Promise<void> {
         const client = this.getActiveClient('setKeyMask');
         return client.setKeyMask(mask);
+    }
+
+    public async getKeyMask(): Promise<number> {
+        const client = this.getActiveClient('getKeyMask');
+        return client.getKeyMask();
+    }
+
+    public async getHeldButtons(): Promise<HeldButtonStatus[]> {
+        const client = this.getActiveClient('getHeldButtons');
+        return client.getHeldButtons();
+    }
+
+    public async holdButtons(buttons: readonly string[]): Promise<void> {
+        const client = this.getActiveClient('holdButtons');
+        let maskToAdd = 0;
+        for (const b of buttons) {
+            maskToAdd |= resolveButtonMask(b);
+        }
+        const currentMask = await client.getKeyMask();
+        await client.setKeyMask(currentMask | maskToAdd);
+    }
+
+    public async releaseButtons(buttons?: readonly string[]): Promise<void> {
+        const client = this.getActiveClient('releaseButtons');
+        if (!buttons || buttons.length === 0) {
+            await client.setKeyMask(0);
+            return;
+        }
+        let maskToRemove = 0;
+        for (const b of buttons) {
+            maskToRemove |= resolveButtonMask(b);
+        }
+        const currentMask = await client.getKeyMask();
+        await client.setKeyMask(currentMask & ~maskToRemove);
+    }
+
+    public async restoreHeldButtons(heldButtons: readonly HeldButtonStatus[]): Promise<void> {
+        const client = this.getActiveClient('restoreHeldButtons');
+        await client.restoreHeldButtons(heldButtons);
     }
 
     public executeSequence(

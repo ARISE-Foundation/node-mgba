@@ -11,6 +11,10 @@ import {
     DEFAULT_HOLD_FRAMES,
     DEFAULT_RELEASE_FRAMES,
     DEFAULT_POST_STABILIZATION_FRAMES,
+    BUTTON_BITMASKS,
+    type ButtonName,
+    type HeldButtonStatus,
+    normalizeButtonName,
     validateInputAction,
     validateStepSequenceOptions,
     type StepSequenceOptions,
@@ -30,6 +34,7 @@ export class MgbaEmulator {
     public readonly registry: PluginRegistry;
     private isInitialized = false;
     private currentKeyMask = 0;
+    private continuousHeldFrames = new Map<ButtonName, number>();
     private activeToken: object | null = null;
     private cancelledTokens = new Set<object>();
 
@@ -138,6 +143,14 @@ export class MgbaEmulator {
                 this.core.stepFrame(this.currentKeyMask);
                 const frameIndex = this.core.getFrameCounter();
 
+                for (const [name, bit] of Object.entries(BUTTON_BITMASKS) as [ButtonName, number][]) {
+                    if ((this.currentKeyMask & bit) !== 0) {
+                        this.continuousHeldFrames.set(name, (this.continuousHeldFrames.get(name) ?? 0) + 1);
+                    } else {
+                        this.continuousHeldFrames.delete(name);
+                    }
+                }
+
                 // Broadcast per-frame event to active plugins
                 await this.registry.notifyFrame({
                     frameIndex,
@@ -211,6 +224,8 @@ export class MgbaEmulator {
                 await this.registry.notifyKeyframe(preAnchor);
             }
 
+            let persistentMask = this.currentKeyMask;
+
             // 2. Execute input actions
             for (const [i, action] of validatedActions.entries()) {
                 if (this.cancelledTokens.has(token) || options.signal?.aborted) {
@@ -227,31 +242,40 @@ export class MgbaEmulator {
                         const mask = resolveButtonMask(action.button);
                         const hold = action.holdFrames ?? defaultHold;
                         const release = action.releaseFrames ?? defaultRelease;
-                        const baseMask = this.currentKeyMask & ~mask;
 
-                        await this.step(hold, baseMask | mask, { signal: options.signal });
-                        await this.step(release, baseMask, { signal: options.signal });
+                        if (hold > 0) {
+                            await this.step(hold, persistentMask | mask, { signal: options.signal });
+                        }
+                        if (release > 0) {
+                            await this.step(release, persistentMask, { signal: options.signal });
+                        } else {
+                            this.currentKeyMask = persistentMask;
+                        }
                         break;
                     }
                     case 'hold': {
                         const mask = resolveButtonMask(action.button);
-                        this.currentKeyMask |= mask;
-                        await this.step(action.frames, this.currentKeyMask, { signal: options.signal });
+                        persistentMask |= mask;
+                        this.currentKeyMask = persistentMask;
+                        if (action.frames && action.frames > 0) {
+                            await this.step(action.frames, persistentMask, { signal: options.signal });
+                        }
                         break;
                     }
                     case 'release': {
                         if (action.button !== undefined) {
                             const mask = resolveButtonMask(action.button);
-                            this.currentKeyMask &= ~mask;
-                            await this.step(1, this.currentKeyMask, { signal: options.signal });
+                            persistentMask &= ~mask;
                         } else {
-                            this.currentKeyMask = 0;
-                            await this.step(1, 0, { signal: options.signal });
+                            persistentMask = 0;
                         }
+                        this.currentKeyMask = persistentMask;
                         break;
                     }
                     case 'wait': {
-                        await this.step(action.frames, this.currentKeyMask, { signal: options.signal });
+                        if (action.frames > 0) {
+                            await this.step(action.frames, persistentMask, { signal: options.signal });
+                        }
                         break;
                     }
                 }
@@ -268,8 +292,9 @@ export class MgbaEmulator {
 
             // 3. Post-action stabilization frames
             if (postStabilization > 0) {
-                await this.step(postStabilization, 0, { signal: options.signal });
+                await this.step(postStabilization, persistentMask, { signal: options.signal });
             }
+            this.currentKeyMask = persistentMask;
 
             // 4. Post-action anchor frame
             const postAnchor = this.collector.sampleFrame(this.core, { triggerReason: 'post_action', force: true });
@@ -329,13 +354,69 @@ export class MgbaEmulator {
     }
 
     /**
+     * Gets the active persistent key mask.
+     */
+    public getKeyMask(): number {
+        return this.currentKeyMask;
+    }
+
+    /**
+     * Sets the active persistent key mask.
+     */
+    public setKeyMask(mask: number): void {
+        this.currentKeyMask = mask;
+        for (const [name, bit] of Object.entries(BUTTON_BITMASKS) as [ButtonName, number][]) {
+            if ((this.currentKeyMask & bit) === 0) {
+                this.continuousHeldFrames.delete(name);
+            }
+        }
+    }
+
+    /**
+     * Restores persistent held buttons and their continuous frame counts.
+     */
+    public restoreHeldButtons(heldButtons: readonly HeldButtonStatus[]): void {
+        let mask = 0;
+        this.continuousHeldFrames.clear();
+        for (const status of heldButtons) {
+            const norm = normalizeButtonName(status.button);
+            const bit = BUTTON_BITMASKS[norm];
+            mask |= bit;
+            this.continuousHeldFrames.set(norm, Math.max(0, status.framesHeld));
+        }
+        this.currentKeyMask = mask;
+    }
+
+    /**
+     * Returns currently held buttons with their continuous frame counts.
+     */
+    public getHeldButtons(): HeldButtonStatus[] {
+        const result: HeldButtonStatus[] = [];
+        for (const [name, bit] of Object.entries(BUTTON_BITMASKS) as [ButtonName, number][]) {
+            if ((this.currentKeyMask & bit) !== 0) {
+                const framesHeld = this.continuousHeldFrames.get(name) ?? 0;
+                result.push({ button: name, framesHeld });
+            }
+        }
+        return result;
+    }
+
+    /**
      * Clears current key mask and active input actions.
      */
     public clearActionQueue(): void {
         this.currentKeyMask = 0;
+        this.continuousHeldFrames.clear();
         if (this.activeToken) {
             this.cancelledTokens.add(this.activeToken);
         }
+    }
+
+    /**
+     * Clears persistent key mask, held frame counts, and active sequence actions.
+     */
+    public clearButtons(): void {
+        this.clearActionQueue();
     }
 
     /**

@@ -98,6 +98,7 @@ function invalidateAllSequences(status: SequenceTerminalStatus, error?: WorkerSe
     unownedPersistentMask = 0;
     sequencePersistentMasks.clear();
     manualMask = 0;
+    emulator.clearButtons();
     actionQueueVersion++;
 }
 
@@ -860,6 +861,22 @@ async function processRequest(req: WorkerRequest): Promise<void> {
                     throw new TypeError(`Invalid keyMask: ${mask}. Expected non-negative integer within valid button bitmasks.`);
                 }
                 manualMask = mask;
+                emulator.setKeyMask(mask);
+                postWorkerResponse(req.id, true, undefined);
+                break;
+            }
+            case 'getKeyMask': {
+                postWorkerResponse(req.id, true, manualMask);
+                break;
+            }
+            case 'getHeldButtons': {
+                const held = emulator.getHeldButtons();
+                postWorkerResponse(req.id, true, held);
+                break;
+            }
+            case 'restoreHeldButtons': {
+                emulator.restoreHeldButtons(req.heldButtons);
+                manualMask = emulator.getKeyMask();
                 postWorkerResponse(req.id, true, undefined);
                 break;
             }

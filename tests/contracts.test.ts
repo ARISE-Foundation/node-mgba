@@ -3,12 +3,15 @@ import assert from 'node:assert/strict';
 import {
     MgbaEmulator,
     WorkerEmulatorClient,
+    EmulatorController,
     press,
     wait,
     normalizeMemoryRegion,
     normalizeMemorySpace,
     parseSinkIdentity,
     resolveButtonMask,
+    normalizeButtonChord,
+    BUTTON_BITMASKS,
     expandButtonsToInputActions,
     validateStepSequenceOptions,
     type PressButtonsOptions,
@@ -384,5 +387,120 @@ test('Contracts & Error Boundaries', async (t) => {
         assert.deepEqual(keysPerFrame, [1, 1, 0, 0, 1, 1, 0, 0]);
 
         await emulator.close();
+    });
+
+    await t.test('27. Chord parsing and normalization should support multi-button chords and reject invalid chords', async () => {
+        assert.equal(normalizeButtonChord('Right+A'), 'RIGHT+A');
+        assert.equal(normalizeButtonChord('b + right'), 'B+RIGHT');
+        assert.equal(resolveButtonMask('Right+A'), BUTTON_BITMASKS.RIGHT | BUTTON_BITMASKS.A);
+        assert.equal(resolveButtonMask('B+Start+Select'), BUTTON_BITMASKS.B | BUTTON_BITMASKS.START | BUTTON_BITMASKS.SELECT);
+
+        // Invalid chords
+        assert.throws(() => normalizeButtonChord(''), /Unrecognized button name/i);
+        assert.throws(() => normalizeButtonChord('Right+'), /Unrecognized button name/i);
+        assert.throws(() => normalizeButtonChord('+A'), /Unrecognized button name/i);
+        assert.throws(() => normalizeButtonChord('Right+INVALID'), /Unrecognized button name/i);
+    });
+
+    await t.test('28. Held-frame counting should track continuous frames and reset upon release', async () => {
+        const emulator = new MgbaEmulator();
+        await emulator.loadROM(romPath);
+
+        const rightMask = BUTTON_BITMASKS.RIGHT;
+        await emulator.step(5, rightMask);
+        assert.deepEqual(emulator.getHeldButtons(), [{ button: 'RIGHT', framesHeld: 5 }]);
+
+        // Additional 5 frames with right held
+        await emulator.step(5, rightMask);
+        assert.deepEqual(emulator.getHeldButtons(), [{ button: 'RIGHT', framesHeld: 10 }]);
+
+        // Releasing right resets held frame counter
+        await emulator.step(1, 0);
+        assert.deepEqual(emulator.getHeldButtons(), []);
+
+        await emulator.close();
+    });
+
+    await t.test('29. Held mask must be preserved during stepSequence across release frames and post-stabilization', async () => {
+        const emulator = new MgbaEmulator();
+        const keysPerFrame: number[] = [];
+        emulator.registerPlugin({
+            name: 'key-tracker',
+            onFrame: (data) => {
+                keysPerFrame.push(data.currentKeys);
+            },
+        });
+        await emulator.loadROM(romPath);
+
+        // Hold RIGHT persistently
+        emulator.setKeyMask(BUTTON_BITMASKS.RIGHT);
+        assert.deepEqual(emulator.getHeldButtons(), [{ button: 'RIGHT', framesHeld: 0 }]);
+
+        // Execute press A with 2 hold frames and 2 release frames, plus 2 postStabilization frames
+        await emulator.stepSequence([
+            { type: 'press', button: 'A', holdFrames: 2, releaseFrames: 2 },
+        ], { postStabilizationFrames: 2 });
+
+        const rightMask = BUTTON_BITMASKS.RIGHT;
+        const rightPlusA = BUTTON_BITMASKS.RIGHT | BUTTON_BITMASKS.A;
+
+        // Expect: 2 frames of (RIGHT | A), 2 frames of (RIGHT), 2 post-stabilization frames of (RIGHT)
+        assert.deepEqual(keysPerFrame, [
+            rightPlusA, rightPlusA,
+            rightMask, rightMask,
+            rightMask, rightMask,
+        ]);
+
+        // Total 6 frames stepped continuously with RIGHT held
+        assert.deepEqual(emulator.getHeldButtons(), [{ button: 'RIGHT', framesHeld: 6 }]);
+        assert.equal(emulator.getKeyMask(), rightMask);
+
+        await emulator.close();
+    });
+
+    await t.test('30. EmulatorController holdButtons and releaseButtons manage persistent controller state', async () => {
+        const controller = new EmulatorController({ romPath });
+        await controller.initialize();
+
+        await controller.holdButtons(['Right', 'B']);
+        const held = await controller.getHeldButtons();
+        assert.equal(held.length, 2);
+        assert.ok(held.some((h) => h.button === 'RIGHT'));
+        assert.ok(held.some((h) => h.button === 'B'));
+
+        // Partial release
+        await controller.releaseButtons(['B']);
+        const remaining = await controller.getHeldButtons();
+        assert.equal(remaining.length, 1);
+        assert.equal(remaining[0]?.button, 'RIGHT');
+
+        // Full release
+        await controller.releaseButtons();
+        const empty = await controller.getHeldButtons();
+        assert.equal(empty.length, 0);
+
+        await controller.close();
+    });
+
+    await t.test('31. EmulatorController restoreHeldButtons restores persistent mask and frame counts', async () => {
+        const controller = new EmulatorController({ romPath });
+        await controller.initialize();
+
+        await controller.restoreHeldButtons([
+            { button: 'RIGHT', framesHeld: 42 },
+            { button: 'A', framesHeld: 15 },
+        ]);
+
+        const held = await controller.getHeldButtons();
+        assert.equal(held.length, 2);
+        const rightStatus = held.find((h) => h.button === 'RIGHT');
+        assert.ok(rightStatus);
+        assert.equal(rightStatus.framesHeld, 42);
+
+        const aStatus = held.find((h) => h.button === 'A');
+        assert.ok(aStatus);
+        assert.equal(aStatus.framesHeld, 15);
+
+        await controller.close();
     });
 });

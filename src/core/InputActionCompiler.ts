@@ -7,6 +7,7 @@ import {
     BUTTON_BITMASKS,
     ALL_VALID_BUTTON_BITS,
     normalizeButtonName,
+    normalizeButtonChord,
     DEFAULT_HOLD_FRAMES,
     DEFAULT_RELEASE_FRAMES,
     DEFAULT_POST_STABILIZATION_FRAMES,
@@ -17,7 +18,7 @@ import {
 export { BUTTON_BITMASKS, ALL_VALID_BUTTON_BITS };
 
 /**
- * Resolves a ButtonName, case-insensitive string, or raw numeric mask to a canonical 32-bit unsigned button bitmask.
+ * Resolves a ButtonName, case-insensitive string, chord string (e.g. "Right+A"), or raw numeric mask to a canonical 32-bit unsigned button bitmask.
  */
 export function resolveButtonMask(button: ButtonName | number | string): number {
     if (typeof button === 'number') {
@@ -26,7 +27,27 @@ export function resolveButtonMask(button: ButtonName | number | string): number 
         }
         return button;
     }
-    const canonical = normalizeButtonName(button);
+    if (typeof button !== 'string') {
+        throw new Error(`Invalid button: expected string or number, received ${typeof button}`);
+    }
+    const trimmed = button.trim();
+    if (!trimmed) {
+        throw new Error(`Unrecognized button name: ""`);
+    }
+    if (trimmed.includes('+')) {
+        const parts = trimmed.split('+');
+        let mask = 0;
+        for (const rawPart of parts) {
+            const part = rawPart.trim();
+            if (!part) {
+                throw new Error(`Unrecognized button name: ${button}`);
+            }
+            const canonical = normalizeButtonName(part);
+            mask |= BUTTON_BITMASKS[canonical];
+        }
+        return mask;
+    }
+    const canonical = normalizeButtonName(trimmed);
     const mask = BUTTON_BITMASKS[canonical];
     if (mask === undefined) {
         throw new Error(`Unknown canonical button: "${String(button)}"`);
@@ -58,7 +79,7 @@ export function expandButtonsToInputActions(
         if (trimmed.toUpperCase() === 'WAIT') {
             actions.push(wait(hold));
         } else {
-            const canonical = normalizeButtonName(trimmed);
+            const canonical = normalizeButtonChord(trimmed);
             actions.push(press(canonical, hold, release));
         }
     }

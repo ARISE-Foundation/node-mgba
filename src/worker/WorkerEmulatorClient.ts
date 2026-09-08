@@ -32,6 +32,7 @@ import type {
     MemoryRegionName,
     MemorySnapshotOptions,
     StateHandle,
+    HeldButtonStatus,
 } from '../types/index.js';
 import {
     validateInputAction,
@@ -761,6 +762,27 @@ export class WorkerEmulatorClient extends EventEmitter {
      */
     public async setKeyMask(mask: number): Promise<void> {
         return this.sendRequest<void>({ type: 'setKeyMask', mask });
+    }
+
+    /**
+     * Gets the active persistent key mask inside the worker thread.
+     */
+    public async getKeyMask(): Promise<number> {
+        return this.sendRequest<number>({ type: 'getKeyMask' });
+    }
+
+    /**
+     * Returns currently held buttons with their continuous frame counts from the worker thread.
+     */
+    public async getHeldButtons(): Promise<HeldButtonStatus[]> {
+        return this.sendRequest<HeldButtonStatus[]>({ type: 'getHeldButtons' });
+    }
+
+    /**
+     * Restores persistent held buttons and continuous frame counts inside the worker thread.
+     */
+    public async restoreHeldButtons(heldButtons: readonly HeldButtonStatus[]): Promise<void> {
+        return this.sendRequest<void>({ type: 'restoreHeldButtons', heldButtons });
     }
 
     /**

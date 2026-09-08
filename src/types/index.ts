@@ -20,6 +20,9 @@ export type { EmulatorPlugin, CommandHandler } from './EmulatorPlugin.js';
 export type {
     InputAction,
     ButtonName,
+    ButtonChord,
+    ButtonInput,
+    HeldButtonStatus,
     InputActionMetadata,
     InputActionBase,
     InputPressAction,
@@ -46,6 +49,7 @@ export {
     release,
     validateInputAction,
     validateStepSequenceOptions,
+    normalizeButtonChord,
 } from './InputAction.js';
 export {
     FatalWorkerError,

@@ -54,6 +54,9 @@ export type ButtonName =
     | 'R'
     | 'L';
 
+export type ButtonChord = `${string}+${string}`;
+export type ButtonInput = ButtonName | ButtonChord | number;
+
 export interface InputActionMetadata {
     readonly sequenceId?: number;
     readonly isTerminal?: boolean;
@@ -65,9 +68,14 @@ export interface InputActionBase {
     readonly metadata?: InputActionMetadata;
 }
 
+export interface HeldButtonStatus {
+    readonly button: ButtonName;
+    readonly framesHeld: number;
+}
+
 export interface InputPressAction extends InputActionBase {
     readonly type: 'press';
-    readonly button: ButtonName | number;
+    readonly button: ButtonInput;
     readonly holdFrames?: number;
     readonly releaseFrames?: number;
 }
@@ -79,13 +87,13 @@ export interface InputWaitAction extends InputActionBase {
 
 export interface InputHoldAction extends InputActionBase {
     readonly type: 'hold';
-    readonly button: ButtonName | number;
+    readonly button: ButtonInput;
     readonly frames: number;
 }
 
 export interface InputReleaseAction extends InputActionBase {
     readonly type: 'release';
-    readonly button?: ButtonName | number;
+    readonly button?: ButtonInput;
 }
 
 export type InputAction =
@@ -95,7 +103,7 @@ export type InputAction =
     | InputReleaseAction;
 
 export function press(
-    button: ButtonName | number,
+    button: ButtonInput,
     holdFrames = DEFAULT_HOLD_FRAMES,
     releaseFrames = DEFAULT_RELEASE_FRAMES,
     metadata?: InputActionMetadata,
@@ -118,8 +126,8 @@ export function wait(frames: number, metadata?: InputActionMetadata): InputWaitA
 }
 
 export function hold(
-    button: ButtonName | number,
-    frames: number,
+    button: ButtonInput,
+    frames = 0,
     metadata?: InputActionMetadata,
 ): InputHoldAction {
     return {
@@ -131,7 +139,7 @@ export function hold(
 }
 
 export function release(
-    button?: ButtonName | number,
+    button?: ButtonInput,
     metadata?: InputActionMetadata,
 ): InputReleaseAction {
     return {
@@ -169,6 +177,32 @@ export function normalizeButtonName(button: string, index?: number): ButtonName 
     throw new Error(`Unrecognized button name: ${button}${atIndex}`);
 }
 
+export function normalizeButtonChord(button: string, index?: number): ButtonName | ButtonChord {
+    if (typeof button !== 'string') {
+        const atIndex = index !== undefined ? ` at index ${index}` : '';
+        throw new Error(`Invalid action${atIndex}: 'button' must be a string or number, received ${typeof button}`);
+    }
+    const trimmed = button.trim();
+    if (!trimmed) {
+        const atIndex = index !== undefined ? ` at index ${index}` : '';
+        throw new Error(`Unrecognized button name: ""${atIndex}`);
+    }
+    if (trimmed.includes('+')) {
+        const parts = trimmed.split('+');
+        const normalizedParts: ButtonName[] = [];
+        for (const rawPart of parts) {
+            const part = rawPart.trim();
+            if (!part) {
+                const atIndex = index !== undefined ? ` at index ${index}` : '';
+                throw new Error(`Unrecognized button name: ${button}${atIndex}`);
+            }
+            normalizedParts.push(normalizeButtonName(part, index));
+        }
+        return normalizedParts.join('+') as ButtonChord;
+    }
+    return normalizeButtonName(trimmed, index);
+}
+
 function validateNonNegativeInteger(val: unknown, fieldName: string, index?: number, allowUndefined = false): void {
     if (allowUndefined && val === undefined) {
         return;
@@ -181,9 +215,9 @@ function validateNonNegativeInteger(val: unknown, fieldName: string, index?: num
     }
 }
 
-function validateButton(button: unknown, index?: number): ButtonName | number {
+function validateButton(button: unknown, index?: number): ButtonInput {
     if (typeof button === 'string') {
-        return normalizeButtonName(button, index);
+        return normalizeButtonChord(button, index) as ButtonInput;
     }
     if (typeof button === 'number') {
         if (!Number.isInteger(button) || !Number.isFinite(button) || button < 0 || (button & ~ALL_VALID_BUTTON_BITS) !== 0) {

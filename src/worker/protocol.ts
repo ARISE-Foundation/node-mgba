@@ -1,4 +1,4 @@
-import type { InputAction, StepSequenceOptions } from '../types/InputAction.js';
+import type { HeldButtonStatus, InputAction, StepSequenceOptions } from '../types/InputAction.js';
 import type { MemorySnapshotOptions, ReadSpec, MemoryRegionName } from '../types/index.js';
 import type { MemorySnapshotReader } from '../core/MemoryReader.js';
 
@@ -190,6 +190,19 @@ export interface SetKeyMaskRequest extends StatefulWorkerRequestBase {
     readonly mask: number;
 }
 
+export interface GetKeyMaskRequest extends StatefulWorkerRequestBase {
+    readonly type: 'getKeyMask';
+}
+
+export interface GetHeldButtonsRequest extends StatefulWorkerRequestBase {
+    readonly type: 'getHeldButtons';
+}
+
+export interface RestoreHeldButtonsRequest extends StatefulWorkerRequestBase {
+    readonly type: 'restoreHeldButtons';
+    readonly heldButtons: readonly HeldButtonStatus[];
+}
+
 export interface EnqueueSequenceRequest extends StatefulWorkerRequestBase {
     readonly type: 'enqueueSequence';
     readonly sequenceId: number;
@@ -264,6 +277,9 @@ export type WorkerRequest =
     | StartPlaybackRequest
     | PausePlaybackRequest
     | SetKeyMaskRequest
+    | GetKeyMaskRequest
+    | GetHeldButtonsRequest
+    | RestoreHeldButtonsRequest
     | EnqueueSequenceRequest
     | CancelSequenceRequest
     | InitMediaPortRequest
@@ -323,6 +339,9 @@ export type WorkerRequestPayload =
     | { readonly type: 'startPlayback'; readonly fps?: number | undefined }
     | { readonly type: 'pausePlayback' }
     | { readonly type: 'setKeyMask'; readonly mask: number }
+    | { readonly type: 'getKeyMask' }
+    | { readonly type: 'getHeldButtons' }
+    | { readonly type: 'restoreHeldButtons'; readonly heldButtons: readonly HeldButtonStatus[] }
     | { readonly type: 'enqueueSequence'; readonly sequenceId: number; readonly actions: readonly InputAction[]; readonly options?: StepSequenceOptions | undefined }
     | { readonly type: 'cancelSequence'; readonly sequenceId: number }
     | { readonly type: 'initMediaPort'; readonly port: import('node:worker_threads').MessagePort }
