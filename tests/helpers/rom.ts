@@ -88,9 +88,10 @@ export function getPokemonRomPath(): string {
  */
 export function hasTestRom(): boolean {
     const envPath = process.env['ROM_PATH'];
-    if (envPath && fs.existsSync(envPath)) return true;
+    if (envPath && fs.existsSync(envPath) && !envPath.toLowerCase().endsWith('.gba')) return true;
     const fixtureRom = resolveRootFixturePath('pokemon_blue.gb');
-    return fs.existsSync(fixtureRom);
+    if (fs.existsSync(fixtureRom)) return true;
+    return fs.existsSync(getHomebrewGbRomPath());
 }
 
 /**
@@ -98,11 +99,17 @@ export function hasTestRom(): boolean {
  */
 export function getTestRom(): RomValidationResult {
     let romPath = process.env['ROM_PATH'];
+    if (romPath && romPath.toLowerCase().endsWith('.gba')) {
+        romPath = undefined;
+    }
     const fixtureRom = resolveRootFixturePath('pokemon_blue.gb');
+    const homebrewRom = getHomebrewGbRomPath();
 
     if (!romPath || romPath.trim() === '') {
         if (fs.existsSync(fixtureRom)) {
             romPath = fixtureRom;
+        } else if (fs.existsSync(homebrewRom)) {
+            romPath = homebrewRom;
         }
     }
 
@@ -131,61 +138,49 @@ export function getTestRomPath(): string {
 
 /**
  * Checks if a valid GBA test ROM is accessible.
- * Defaults to homebrew test_gba.gba if no custom or commercial ROM is specified.
  */
 export function hasGbaTestRom(): boolean {
-    const envPath = process.env['GBA_ROM_PATH'];
-    if (envPath && fs.existsSync(envPath)) return true;
-    const fixtureRom = resolveRootFixturePath('super_mario_bros.gba');
-    if (fs.existsSync(fixtureRom)) return true;
+    const envPath = process.env['ROM_PATH'];
+    if (envPath && fs.existsSync(envPath) && envPath.toLowerCase().endsWith('.gba')) return true;
     return fs.existsSync(getHomebrewGbaRomPath());
 }
 
 /**
- * Resolves the GBA test ROM path, falling back to homebrew test_gba.gba.
+ * Resolves the GBA test ROM path.
  */
 export function getGbaTestRomPath(): string {
-    const envPath = process.env['GBA_ROM_PATH'];
-    if (envPath && fs.existsSync(envPath)) return envPath;
-    const fixtureRom = resolveRootFixturePath('super_mario_bros.gba');
-    if (fs.existsSync(fixtureRom)) return fixtureRom;
+    const envPath = process.env['ROM_PATH'];
+    if (envPath && fs.existsSync(envPath) && envPath.toLowerCase().endsWith('.gba')) return envPath;
     const homebrewRom = getHomebrewGbaRomPath();
     if (fs.existsSync(homebrewRom)) return homebrewRom;
-    throw new Error(`No GBA test ROM found at "${homebrewRom}" or via GBA_ROM_PATH`);
+    throw new Error(`No GBA test ROM found at "${homebrewRom}" or via ROM_PATH`);
+}
+
+function resolveSavestateForRom(romPath: string): string | null {
+    const envPath = process.env['SAVESTATE_PATH'];
+    if (envPath && fs.existsSync(envPath)) return envPath;
+
+    const homebrewSs = getHomebrewGbaSavestatePath();
+    if (fs.existsSync(homebrewSs) && romPath === getHomebrewGbaRomPath()) {
+        return homebrewSs;
+    }
+
+    return null;
 }
 
 /**
  * Checks if a GBA savestate is accessible matching the active GBA ROM.
  */
 export function hasGbaSavestate(): boolean {
-    const envPath = process.env['GBA_SAVESTATE_PATH'];
-    if (envPath && fs.existsSync(envPath)) return true;
-
-    const activeRom = getGbaTestRomPath();
-    if (activeRom.includes('super_mario_bros')) {
-        const marioSs = resolveRootFixturePath('super_mario_bros.ss0');
-        if (fs.existsSync(marioSs)) return true;
-    }
-
-    return fs.existsSync(getHomebrewGbaSavestatePath());
+    return resolveSavestateForRom(getGbaTestRomPath()) !== null;
 }
 
 /**
  * Resolves the GBA savestate path matching the active GBA ROM.
  */
 export function getGbaSavestatePath(): string {
-    const envPath = process.env['GBA_SAVESTATE_PATH'];
-    if (envPath && fs.existsSync(envPath)) return envPath;
-
     const activeRom = getGbaTestRomPath();
-    if (activeRom.includes('super_mario_bros')) {
-        const marioSs = resolveRootFixturePath('super_mario_bros.ss0');
-        if (fs.existsSync(marioSs)) return marioSs;
-    }
-
-    const homebrewSs = getHomebrewGbaSavestatePath();
-    if (fs.existsSync(homebrewSs)) return homebrewSs;
-    throw new Error(`No GBA savestate found at "${homebrewSs}" or via GBA_SAVESTATE_PATH`);
+    const resolved = resolveSavestateForRom(activeRom);
+    if (resolved) return resolved;
+    throw new Error(`No savestate found for ROM at "${activeRom}". Set SAVESTATE_PATH to run savestate tests.`);
 }
-
-

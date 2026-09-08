@@ -51,11 +51,11 @@ await emu.close();
 
 | Platform / Model | Emulation & Controls | Direct Memory (`read8`, `readBatch`, `slice`) | Memory Snapshots (`observe`, `GamePlugin.getState()`) |
 |---|---|---|---|
-| **Game Boy (DMG / SGB)** | Supported | Supported | Supported |
-| **Game Boy Color (CGB)** | Supported | Supported | Supported |
-| **Game Boy Advance (AGB)** | Supported | Supported | *Planned on Roadmap* |
+| **Game Boy (DMG / SGB)** | Supported (160×144) | Supported | Supported |
+| **Game Boy Color (CGB)** | Supported (160×144) | Supported | Supported |
+| **Game Boy Advance (AGB)** | Supported (240×160) | Supported (`EWRAM`, `IWRAM`, `ROM`) | *Planned on Roadmap* |
 
-> **Note on GBA Memory Snapshots**: GBA emulation, gamepad controls, audio/video streaming, savestates, and direct bus memory reads (`read8`, `read16LE`, `read32LE`, `slice`) are currently supported. Snapshots covering multiple memory regions (`emu.observe({ memory: ... })` and `GamePlugin.getState()`) are currently limited to Game Boy (DMG/CGB/SGB) models and are planned on the roadmap for GBA.
+> **Note on GBA Memory Snapshots**: GBA emulation, controls, audio/video streaming, savestates, and direct memory reads are supported. Multi-region snapshots (`emu.observe({ memory: ... })` and `GamePlugin.getState()`) are currently limited to Game Boy (DMG/CGB/SGB) models and planned for GBA.
 
 ---
 
@@ -63,8 +63,9 @@ await emu.close();
 
 ### Input & Frame Stepping
 ```typescript
-// Press with explicit frame timing
-await emu.controls.press('START', { holdFrames: 8, releaseFrames: 4 });
+// Press returns a TurnResult with keyframes
+const turnResult = await emu.controls.press('A', 8);
+console.log(`Captured ${turnResult.keyframes.length} keyframes`);
 
 // Hold a button across multiple ticks
 await emu.controls.hold('B');
@@ -72,11 +73,27 @@ await emu.controls.tick(30);
 await emu.controls.release('B');
 
 // Run an input sequence
-await emu.controls.sequence([
+const sequenceResult = await emu.controls.sequence([
     { type: 'press', button: 'UP', holdFrames: 6, releaseFrames: 4 },
     { type: 'wait', frames: 10 },
     { type: 'press', button: 'A', holdFrames: 6, releaseFrames: 4 },
 ]);
+```
+
+### Screen Capture & Cropping
+```typescript
+// Capture full screen as PNG or WebP
+const pngBuffer = await emu.screen.toPng();
+const webpBuffer = await emu.screen.toWebp({ quality: 85 });
+
+// Crop a sub-region with optional integer scaling (e.g. 2x, 4x)
+const croppedPng = await emu.screen.crop({
+    x: 16,
+    y: 16,
+    width: 32,
+    height: 32,
+    scale: 2, // 64x64 output
+});
 ```
 
 ### Reading & Writing Memory
@@ -85,6 +102,10 @@ await emu.controls.sequence([
 const byte = await emu.memory.read8(0xC000);
 const u16 = await emu.memory.read16LE(0xC001);
 const u32 = await emu.memory.read32LE(0xC003);
+
+// Read GBA regions directly
+const ewram = await emu.memory.readRegion('EWRAM', 0, 64);
+const iwram = await emu.memory.readRegion('IWRAM', 0, 64);
 
 // Write to memory
 await emu.memory.write8(0xC500, 0x42);
@@ -194,24 +215,32 @@ For full benchmarks and methodology, see the [Performance & Benchmarks Guide](do
 
 ## Development & Testing
 
-### Obtaining ROMs & Legal Notice
-
-`node-mgba` does **not** distribute copyrighted game ROMs or proprietary BIOS files. To run tests or execute automation scripts with commercial games, you must provide your own legally obtained ROM files (for example, dumped from physical cartridges you own using hardware such as GBxCart RW, Joey Jr, or Epilogue GB Operator). Open-source homebrew ROMs (`.gb`, `.gbc`, `.gba`) can also be used for testing and general development.
-
-The built-in `PokemonRedBluePlugin` supports standard English and European releases of *Pokémon Red* and *Pokémon Blue*, as well as ROM hacks (such as color palette swaps or quality-of-life patches) that preserve standard Gen 1 RAM layouts.
-
 ### Running Tests
 
-The test suite adapts automatically to whether a ROM is available:
+Tests run against bundled homebrew fixtures by default:
 
 ```bash
-# Run unit tests (runs pure in-memory decoders and mocks without needing a ROM)
+# Run test suite
 pnpm test
 
-# Run full integration suite with a Game Boy ROM
+# Run Pokémon Red/Blue plugin tests with a ROM dump
+export POKEMON_ROM_PATH="/path/to/pokemon_blue.gb"
+pnpm test
+
+# Override test ROM or savestate path
 export ROM_PATH="/path/to/game.gb"
+export SAVESTATE_PATH="/path/to/game.ss0"
 pnpm test
 ```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `MGBA_LOG_LEVEL` | `warn` | Native mGBA log level (`silent`, `fatal`, `error`, `warn`, `info`, `debug`). |
+| `POKEMON_ROM_PATH` | — | Path to Pokémon Red/Blue ROM for `pokemon_red_blue.test.ts`. |
+| `ROM_PATH` | Bundled homebrew fixtures | Test ROM path (`.gb`, `.gbc`, or `.gba`). |
+| `SAVESTATE_PATH` | Bundled homebrew fixture | Savestate fixture path (`.ss0`) for savestate tests. |
 
 ### Interactive Web GUI Studio
 

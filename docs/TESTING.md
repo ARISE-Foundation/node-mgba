@@ -77,3 +77,24 @@ All mutation methods return `this` to allow fluent call chaining:
 | `mem.writeBytes(addr, data)` | Write an array or Buffer of bytes starting at address |
 | `mem.writeRomU8(offset, val)` | Write a single byte to flat physical ROM space |
 | `mem.writeRomBytes(offset, data)` | Write an array or Buffer of bytes to flat physical ROM space |
+
+---
+
+## Integration Tests
+
+Integration test suites run against bundled homebrew fixtures by default:
+
+```bash
+pnpm test
+```
+
+To run game-specific plugin tests or override test fixtures:
+
+```bash
+export POKEMON_ROM_PATH="/path/to/pokemon_blue.gb"
+export ROM_PATH="/path/to/game.gb"
+export SAVESTATE_PATH="/path/to/state.ss0"
+export MGBA_LOG_LEVEL=silent
+pnpm test
+```
+

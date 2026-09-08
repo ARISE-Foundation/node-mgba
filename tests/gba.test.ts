@@ -5,7 +5,7 @@ import { hasGbaTestRom, getGbaTestRomPath, hasGbaSavestate, getGbaSavestatePath 
 
 test('GBA ROM & Savestate Integration Suite', async (t) => {
     if (!hasGbaTestRom()) {
-        t.skip('GBA test ROM fixture not found (set GBA_ROM_PATH to run)');
+        t.skip('GBA test ROM fixture not found (set ROM_PATH to run)');
         return;
     }
     const romPath = getGbaTestRomPath();
