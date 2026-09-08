@@ -189,5 +189,6 @@ export {
     PokemonRedBluePlugin,
     isPokemonRedBlue,
     type PokemonRedBlueState,
+    type MapObject,
     POKEMON_BLUE_SHA256,
 } from './plugins/pokemonRedBlue.js';

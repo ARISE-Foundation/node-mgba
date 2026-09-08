@@ -75,7 +75,7 @@ export interface MgbaScreenApi {
     readonly frame: () => Promise<VideoPacket>;
     readonly toPng: () => Promise<Buffer>;
     readonly toWebp: (options?: { quality?: number }) => Promise<Buffer>;
-    readonly crop: (box: { x: number; y: number; width: number; height: number }, format?: 'png' | 'raw') => Promise<Buffer>;
+    readonly crop: (box: { x: number; y: number; width: number; height: number; scale?: number }, format?: 'png' | 'raw') => Promise<Buffer>;
     readonly sprites: (options?: { is8x16GbMode?: boolean }) => Promise<readonly Sprite[]>;
     readonly vram: () => Promise<Buffer>;
     readonly oam: () => Promise<Buffer>;
@@ -237,7 +237,7 @@ export class MgbaInstance extends EventEmitter {
                     .toBuffer();
             },
 
-            crop: async (box: { x: number; y: number; width: number; height: number }, format: 'png' | 'raw' = 'png'): Promise<Buffer> => {
+            crop: async (box: { x: number; y: number; width: number; height: number; scale?: number }, format: 'png' | 'raw' = 'png'): Promise<Buffer> => {
                 const obs = await this.client.observe({ screen: true });
                 const width = obs.width ?? (this.console.model === 'AGB' ? 240 : 160);
                 const height = obs.height ?? (this.console.model === 'AGB' ? 160 : 144);
@@ -248,7 +248,7 @@ export class MgbaInstance extends EventEmitter {
                 const clampedWidth = Math.max(1, Math.min(box.width, width - clampedX));
                 const clampedHeight = Math.max(1, Math.min(box.height, height - clampedY));
 
-                const sharpInstance = sharp(rawBuffer, {
+                let sharpInstance = sharp(rawBuffer, {
                     raw: { width, height, channels: 4 },
                 }).extract({
                     left: clampedX,
@@ -256,6 +256,13 @@ export class MgbaInstance extends EventEmitter {
                     width: clampedWidth,
                     height: clampedHeight,
                 });
+
+                if (box.scale && box.scale > 1) {
+                    sharpInstance = sharpInstance.resize({
+                        width: Math.round(clampedWidth * box.scale),
+                        kernel: 'nearest',
+                    });
+                }
 
                 if (format === 'raw') {
                     return sharpInstance.raw().toBuffer();
