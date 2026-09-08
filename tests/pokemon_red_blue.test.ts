@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { Mgba, PokemonRedBluePlugin, isPokemonRedBlue } from '../src/index.js';
 import { isTextboxOrMenuOpen, decodeScreenText } from '../src/plugins/redblue/decoder.js';
-import { getTestRom, hasTestRom } from './helpers/rom.js';
+import { getPokemonRom, hasPokemonRom } from './helpers/rom.js';
 
 test('PokemonRedBluePlugin RAM Decoder Integration', async (t) => {
-    if (!hasTestRom()) {
-        t.skip('Test ROM fixture not found (set ROM_PATH to run)');
+    if (!hasPokemonRom()) {
+        t.skip('Pokémon Red/Blue ROM fixture not found (set POKEMON_ROM_PATH to run)');
         return;
     }
-    const testRom = getTestRom();
+    const testRom = getPokemonRom();
     const emu = await Mgba.load(testRom.path);
 
     try {

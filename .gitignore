@@ -9,7 +9,8 @@ native/*.o
 *.gb
 *.gbc
 *.gba
-fixtures/
+/fixtures/
+!tests/fixtures/homebrew/**
 vendor/mgba-dist/share/
 gui/dist/
 .vscode/
