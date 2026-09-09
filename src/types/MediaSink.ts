@@ -7,6 +7,7 @@ export interface VideoPacket {
     readonly height: number;
     readonly strideBytes: number;
     readonly buffer: Buffer | Uint8Array;
+    readonly keys: number;
 }
 
 export interface AudioChunk {

@@ -223,6 +223,7 @@ export class NativeMgbaCore {
     };
     private sampleRate = 0;
     private audioStagingBuffer: Buffer = Buffer.allocUnsafe(16384 * 4);
+    private lastKeys = 0;
 
     /**
      * Loads and initializes a ROM headlessly.
@@ -322,11 +323,13 @@ export class NativeMgbaCore {
 
     public reset(): void {
         this.ensureOpen();
+        this.lastKeys = 0;
         mgba_reset(this.handle);
     }
 
     public stepFrame(keys = 0): void {
         this.ensureOpen();
+        this.lastKeys = keys;
         mgba_step_frame(this.handle, keys);
     }
 
@@ -355,6 +358,7 @@ export class NativeMgbaCore {
             height,
             strideBytes,
             buffer: buf,
+            keys: this.lastKeys,
         };
     }
 

@@ -50,6 +50,7 @@ export {
     validateInputAction,
     validateStepSequenceOptions,
     normalizeButtonChord,
+    maskToButtonNames,
 } from './InputAction.js';
 export {
     FatalWorkerError,

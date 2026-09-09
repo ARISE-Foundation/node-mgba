@@ -12,6 +12,7 @@ test('encodeVideoPacket Image Compression Suite', async (t) => {
         height: 144,
         strideBytes: 640,
         buffer: rawBuffer,
+        keys: 0,
     };
 
     await t.test('1. Encodes raw VideoPacket to WebP buffer', async () => {
@@ -60,6 +61,7 @@ test('encodeVideoPacket Image Compression Suite', async (t) => {
             height,
             strideBytes: paddedStride,
             buffer: paddedBuffer,
+            keys: 0,
         };
 
         const pngBuf = await encodeVideoPacket(paddedPacket, { format: 'png' });

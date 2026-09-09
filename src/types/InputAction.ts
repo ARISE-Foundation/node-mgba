@@ -164,6 +164,21 @@ export const BUTTON_BITMASKS: Readonly<Record<ButtonName, number>> = Object.free
 
 export const ALL_VALID_BUTTON_BITS = (1 << 10) - 1; // 0x3FF
 
+export function maskToButtonNames(mask: number): ButtonName[] {
+    const buttons: ButtonName[] = [];
+    if ((mask & BUTTON_BITMASKS.A) !== 0) buttons.push('A');
+    if ((mask & BUTTON_BITMASKS.B) !== 0) buttons.push('B');
+    if ((mask & BUTTON_BITMASKS.SELECT) !== 0) buttons.push('SELECT');
+    if ((mask & BUTTON_BITMASKS.START) !== 0) buttons.push('START');
+    if ((mask & BUTTON_BITMASKS.RIGHT) !== 0) buttons.push('RIGHT');
+    if ((mask & BUTTON_BITMASKS.LEFT) !== 0) buttons.push('LEFT');
+    if ((mask & BUTTON_BITMASKS.UP) !== 0) buttons.push('UP');
+    if ((mask & BUTTON_BITMASKS.DOWN) !== 0) buttons.push('DOWN');
+    if ((mask & BUTTON_BITMASKS.R) !== 0) buttons.push('R');
+    if ((mask & BUTTON_BITMASKS.L) !== 0) buttons.push('L');
+    return buttons;
+}
+
 export function normalizeButtonName(button: string, index?: number): ButtonName {
     if (typeof button !== 'string') {
         const atIndex = index !== undefined ? ` at index ${index}` : '';

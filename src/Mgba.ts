@@ -221,6 +221,7 @@ export class MgbaInstance extends EventEmitter {
                     height,
                     strideBytes: width * 4,
                     buffer: Buffer.isBuffer(obs.screenBuffer) ? obs.screenBuffer : Buffer.alloc(0),
+                    keys: 0,
                 };
             },
 

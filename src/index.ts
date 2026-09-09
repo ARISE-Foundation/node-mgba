@@ -176,6 +176,7 @@ export {
     validateInputAction,
     validateStepSequenceOptions,
     normalizeButtonChord,
+    maskToButtonNames,
     parseSinkIdentity,
     DEFAULT_HOLD_FRAMES,
     DEFAULT_RELEASE_FRAMES,

@@ -23,6 +23,7 @@ export interface WorkerVideoPacketPayload {
     readonly height: number;
     readonly strideBytes: number;
     readonly buffer: Uint8Array;
+    readonly keys: number;
 }
 
 export interface WorkerAudioChunkPayload {

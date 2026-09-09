@@ -22,6 +22,7 @@ export async function encodeKeyframe(
             height: keyframe.height,
             strideBytes: keyframe.width * 4,
             buffer: keyframe.buffer,
+            keys: 0,
         },
         options,
     );

@@ -105,6 +105,7 @@ function deserializeVideoPacket(raw: WorkerVideoPacketPayload): VideoPacket {
         height: raw.height,
         strideBytes: raw.strideBytes,
         buffer: toNodeBuffer(raw.buffer),
+        keys: raw.keys,
     };
 }
 

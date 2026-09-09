@@ -328,6 +328,26 @@ await controller.initialize();
 controller.unregisterMediaSink('vod-recorder');
 ```
 
+#### Per-Frame Input Tracking (`VideoPacket.keys`)
+
+Each `VideoPacket` delivered to `onVideoFrame(packet)` carries the `keys: number` bitmask representing the hardware buttons held on that exact frame (`0` when idle). You can decode this mask to canonical button names using `maskToButtonNames`:
+
+```typescript
+import { maskToButtonNames, type MediaSink, type VideoPacket } from 'node-mgba';
+
+const spectatorSink: MediaSink = {
+    name: 'spectator-overlay-sink',
+    onVideoFrame(packet: VideoPacket) {
+        const activeButtons = maskToButtonNames(packet.keys);
+        // e.g. ['RIGHT', 'B'] or []
+        broadcastToClients({
+            frameIndex: packet.frameIndex,
+            buttons: activeButtons,
+        });
+    },
+};
+```
+
 ### 3. Frontend Client Playback (Canvas & Web Audio)
 
 The `node-mgba/browser` export provides client-side utilities to render video frames to an HTML `<canvas>` and stream stereo audio chunks with drift compensation and jitter buffering:

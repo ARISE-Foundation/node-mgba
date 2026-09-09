@@ -630,6 +630,7 @@ function serializeVideoPacket(packet: VideoPacket): { payload: WorkerVideoPacket
             height: packet.height,
             strideBytes: packet.strideBytes,
             buffer: packet.buffer,
+            keys: packet.keys,
         },
         transferList,
     };

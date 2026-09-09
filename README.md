@@ -139,7 +139,7 @@ await emu.waitFor({
 
 ### Video & Audio Streaming
 ```typescript
-import { Mgba, WebSocketMediaSink, FfmpegRecordingSink } from 'node-mgba';
+import { Mgba, WebSocketMediaSink, FfmpegRecordingSink, maskToButtonNames } from 'node-mgba';
 
 // Stream video and audio chunks over WebSocket clients
 const wsSink = new WebSocketMediaSink({
@@ -153,9 +153,22 @@ const recorder = new FfmpegRecordingSink({
     fps: 60,
 });
 
+// Custom MediaSink with per-frame button input tracking
+const customSink = {
+    name: 'input-tracking-sink',
+    onVideoFrame: (packet) => {
+        // packet.keys contains the 32-bit button bitmask active on this exact frame
+        const buttons = maskToButtonNames(packet.keys);
+        console.log(`Frame #${packet.frameIndex} rendered with active buttons:`, buttons);
+    },
+    onAudioChunk: (chunk) => {
+        // stereo PCM audio
+    },
+};
+
 // Pass sinks when loading the emulator
 const emu = await Mgba.load('./game.gb', {
-    mediaSinks: [wsSink, recorder],
+    mediaSinks: [wsSink, recorder, customSink],
 });
 ```
 

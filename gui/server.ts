@@ -119,6 +119,7 @@ async function main() {
         height: 144,
         strideBytes: 160 * 4,
         buffer: Buffer.alloc(160 * 144 * 4),
+        keys: 0,
     };
 
     let activeKeyMask = 0;
@@ -361,6 +362,7 @@ async function main() {
                                         height: lastKf.height,
                                         strideBytes: lastKf.width * 4,
                                         buffer: lastKf.buffer,
+                                        keys: 0,
                                     };
                                 }
 

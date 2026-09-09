@@ -11,6 +11,7 @@ import {
     parseSinkIdentity,
     resolveButtonMask,
     normalizeButtonChord,
+    maskToButtonNames,
     BUTTON_BITMASKS,
     expandButtonsToInputActions,
     validateStepSequenceOptions,
@@ -502,5 +503,24 @@ test('Contracts & Error Boundaries', async (t) => {
         assert.equal(aStatus.framesHeld, 15);
 
         await controller.close();
+    });
+
+    await t.test('32. VideoPacket carries keys and maskToButtonNames decodes masks accurately', async () => {
+        const emulator = new MgbaEmulator();
+        await emulator.loadROM(romPath);
+
+        // Verify maskToButtonNames
+        assert.deepEqual(maskToButtonNames(0), []);
+        assert.deepEqual(maskToButtonNames(BUTTON_BITMASKS.A), ['A']);
+        assert.deepEqual(maskToButtonNames(BUTTON_BITMASKS.RIGHT | BUTTON_BITMASKS.B), ['B', 'RIGHT']);
+
+        // Step core with mask (RIGHT + A) = 16 + 1 = 17
+        const testMask = BUTTON_BITMASKS.RIGHT | BUTTON_BITMASKS.A;
+        emulator.core.stepFrame(testMask);
+        const packet = emulator.core.getVideoFrame();
+        assert.equal(packet.keys, testMask);
+        assert.deepEqual(maskToButtonNames(packet.keys), ['A', 'RIGHT']);
+
+        await emulator.close();
     });
 });
