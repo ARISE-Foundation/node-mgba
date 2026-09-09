@@ -107,6 +107,7 @@ export type {
     WorkerEvent,
     WorkerEmulatorClientOptions,
     ObservationSnapshot,
+    ScreenSnapshot,
     SliceSpec,
     MemoryChangeEntry,
 } from './worker/protocol.js';

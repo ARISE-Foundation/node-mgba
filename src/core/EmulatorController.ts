@@ -423,7 +423,6 @@ export class EmulatorController extends EventEmitter {
             sequenceId,
             actionsExecuted: actions.length,
             turnResult,
-            keyframes: turnResult.keyframes,
         }));
         return {
             sequenceId,

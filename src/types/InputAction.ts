@@ -1,4 +1,3 @@
-import type { Keyframe } from './Keyframe.js';
 import type { TurnResult } from './TurnResult.js';
 
 export const GB_FPS = 59.7275005696;
@@ -23,7 +22,6 @@ export interface SequenceExecutionResult {
     readonly sequenceId: number;
     readonly actionsExecuted: number;
     readonly turnResult?: TurnResult | undefined;
-    readonly keyframes?: readonly Keyframe[] | undefined;
 }
 
 export interface SequenceHandle {

@@ -137,8 +137,10 @@ describe('EmulatorController Lifecycle & DX Suite', { skip: !hasTestRom() }, () 
             assert.equal(controllerWithRom.state, 'ready');
 
             const obs = await controllerWithRom.observe({ screen: true });
-            assert.ok(obs.screenBuffer);
-            assert.equal(obs.screenBuffer.length, 160 * 144 * 4);
+            assert.ok(obs.screen);
+            assert.equal(obs.screen.buffer.length, 160 * 144 * 4);
+            assert.equal(obs.screen.width, 160);
+            assert.equal(obs.screen.height, 144);
 
             const stepPacket = await controllerWithRom.step(1);
             assert.equal(stepPacket.width, 160);

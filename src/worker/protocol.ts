@@ -237,12 +237,22 @@ export interface MemorySnapshotPayload {
     readonly sram?: Uint8Array | undefined;
 }
 
+export interface ScreenSnapshotPayload {
+    readonly buffer: Uint8Array;
+    readonly width: number;
+    readonly height: number;
+}
+
+export interface ScreenSnapshot {
+    readonly buffer: Buffer;
+    readonly width: number;
+    readonly height: number;
+}
+
 export interface WorkerObservationPayload {
     readonly frameIndex: number;
     readonly timestamp: number;
-    readonly screenBuffer?: Uint8Array | undefined;
-    readonly width?: number | undefined;
-    readonly height?: number | undefined;
+    readonly screen?: ScreenSnapshotPayload | undefined;
     readonly memory?: MemorySnapshotPayload | undefined;
     readonly data: Record<string, number | Uint8Array>;
     readonly slices?: Record<string, Uint8Array> | undefined;
@@ -251,9 +261,7 @@ export interface WorkerObservationPayload {
 export interface ObservationSnapshot {
     readonly frameIndex: number;
     readonly timestamp: number;
-    readonly screenBuffer?: Buffer | undefined;
-    readonly width?: number | undefined;
-    readonly height?: number | undefined;
+    readonly screen?: ScreenSnapshot | undefined;
     readonly memory?: MemorySnapshotReader | undefined;
     readonly data: Record<string, number | Buffer>;
     readonly slices?: Record<string, Buffer> | undefined;

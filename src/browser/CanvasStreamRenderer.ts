@@ -117,15 +117,20 @@ export class CanvasStreamRenderer {
                 return;
             }
 
-            const stride = frame.strideBytes ?? width * 4;
+            const stride = frame.strideBytes;
             const { data } = this.imgData;
 
             if (stride === width * 4 && rawBytes.length >= width * height * 4) {
                 for (let i = 0; i < width * height * 4; i += 4) {
-                    data[i] = rawBytes[i] ?? 0;
-                    data[i + 1] = rawBytes[i + 1] ?? 0;
-                    data[i + 2] = rawBytes[i + 2] ?? 0;
-                    data[i + 3] = 255;
+                    const r = rawBytes[i];
+                    const g = rawBytes[i + 1];
+                    const b = rawBytes[i + 2];
+                    if (r !== undefined && g !== undefined && b !== undefined) {
+                        data[i] = r;
+                        data[i + 1] = g;
+                        data[i + 2] = b;
+                        data[i + 3] = 255;
+                    }
                 }
             } else {
                 // Unpack row-by-row respecting stride
@@ -135,10 +140,15 @@ export class CanvasStreamRenderer {
                     for (let x = 0; x < width; x++) {
                         const srcIdx = srcRowOffset + x * 4;
                         const dstIdx = dstRowOffset + x * 4;
-                        data[dstIdx] = rawBytes[srcIdx] ?? 0;
-                        data[dstIdx + 1] = rawBytes[srcIdx + 1] ?? 0;
-                        data[dstIdx + 2] = rawBytes[srcIdx + 2] ?? 0;
-                        data[dstIdx + 3] = 255;
+                        const r = rawBytes[srcIdx];
+                        const g = rawBytes[srcIdx + 1];
+                        const b = rawBytes[srcIdx + 2];
+                        if (r !== undefined && g !== undefined && b !== undefined) {
+                            data[dstIdx] = r;
+                            data[dstIdx + 1] = g;
+                            data[dstIdx + 2] = b;
+                            data[dstIdx + 3] = 255;
+                        }
                     }
                 }
             }

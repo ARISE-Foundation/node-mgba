@@ -24,6 +24,7 @@ import {
     type WorkerErrorCode,
     type MemorySnapshotPayload,
     type WorkerObservationPayload,
+    type ScreenSnapshotPayload,
     type MemoryChangeEntry,
     type WorkerEvent,
     type SequenceTerminalStatus,
@@ -683,8 +684,8 @@ function serializeTurnResult(result: TurnResult): { payload: WorkerTurnResultPay
 
 function serializeObservationPayload(obs: WorkerObservationPayload): { payload: WorkerObservationPayload; transferList: ArrayBuffer[] } {
     const transferList: ArrayBuffer[] = [];
-    if (obs.screenBuffer) {
-        const buf = extractTransferableArrayBuffer(obs.screenBuffer);
+    if (obs.screen) {
+        const buf = extractTransferableArrayBuffer(obs.screen.buffer);
         if (buf) transferList.push(buf);
     }
     if (obs.slices) {
@@ -1043,15 +1044,15 @@ async function processRequest(req: WorkerRequest): Promise<void> {
             case 'observe': {
                 const frameIndex = emulator.core.getFrameCounter();
                 const timestamp = Date.now();
-                let screenBuffer: Uint8Array | undefined;
-                let width: number | undefined;
-                let height: number | undefined;
+                let screenSnapshot: ScreenSnapshotPayload | undefined;
 
                 if (req.screen) {
                     const vid = emulator.core.getVideoFrame();
-                    screenBuffer = vid.buffer;
-                    width = vid.width;
-                    height = vid.height;
+                    screenSnapshot = {
+                        buffer: vid.buffer,
+                        width: vid.width,
+                        height: vid.height,
+                    };
                 }
 
                 let memorySnapshot: MemorySnapshotPayload | undefined;
@@ -1120,9 +1121,7 @@ async function processRequest(req: WorkerRequest): Promise<void> {
                 const snapshot: WorkerObservationPayload = {
                     frameIndex,
                     timestamp,
-                    screenBuffer,
-                    width,
-                    height,
+                    screen: screenSnapshot,
                     memory: memorySnapshot,
                     data,
                     slices,

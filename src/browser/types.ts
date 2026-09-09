@@ -2,7 +2,7 @@ export interface BrowserFramePacket {
     readonly type: 'frame';
     readonly width: number;
     readonly height: number;
-    readonly strideBytes?: number;
+    readonly strideBytes: number;
     readonly frameIndex: number;
     readonly pts?: number;
     readonly bufferBase64?: string;

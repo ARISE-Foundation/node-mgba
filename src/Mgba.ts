@@ -212,26 +212,29 @@ export class MgbaInstance extends EventEmitter {
         return {
             frame: async (): Promise<VideoPacket> => {
                 const obs = await this.client.observe({ screen: true });
-                const width = obs.width ?? this.console.width;
-                const height = obs.height ?? this.console.height;
+                if (!obs.screen) {
+                    throw new Error('Screen buffer not available in observation');
+                }
+                const { width, height, buffer } = obs.screen;
                 return {
                     frameIndex: obs.frameIndex,
                     pts: obs.frameIndex / (262144 / 4389),
                     width,
                     height,
                     strideBytes: width * 4,
-                    buffer: Buffer.isBuffer(obs.screenBuffer) ? obs.screenBuffer : Buffer.alloc(0),
+                    buffer,
                     keys: 0,
                 };
             },
 
             toPng: async (): Promise<Buffer> => {
                 const obs = await this.client.observe({ screen: true });
-                const width = obs.width ?? this.console.width;
-                const height = obs.height ?? this.console.height;
-                const rawBuffer = obs.screenBuffer ?? Buffer.alloc(width * height * 4);
+                if (!obs.screen) {
+                    throw new Error('Screen buffer not available in observation');
+                }
+                const { width, height, buffer } = obs.screen;
 
-                return sharp(rawBuffer, {
+                return sharp(buffer, {
                     raw: { width, height, channels: 4 },
                 })
                     .png()
@@ -240,16 +243,17 @@ export class MgbaInstance extends EventEmitter {
 
             crop: async (box: { x: number; y: number; width: number; height: number; scale?: number }, format: 'png' | 'raw' = 'png'): Promise<Buffer> => {
                 const obs = await this.client.observe({ screen: true });
-                const width = obs.width ?? this.console.width;
-                const height = obs.height ?? this.console.height;
-                const rawBuffer = obs.screenBuffer ?? Buffer.alloc(width * height * 4);
+                if (!obs.screen) {
+                    throw new Error('Screen buffer not available in observation');
+                }
+                const { width, height, buffer } = obs.screen;
 
                 const clampedX = Math.max(0, Math.min(box.x, width - 1));
                 const clampedY = Math.max(0, Math.min(box.y, height - 1));
                 const clampedWidth = Math.max(1, Math.min(box.width, width - clampedX));
                 const clampedHeight = Math.max(1, Math.min(box.height, height - clampedY));
 
-                let sharpInstance = sharp(rawBuffer, {
+                let sharpInstance = sharp(buffer, {
                     raw: { width, height, channels: 4 },
                 }).extract({
                     left: clampedX,
@@ -271,16 +275,17 @@ export class MgbaInstance extends EventEmitter {
                 return sharpInstance.png().toBuffer();
             },
 
-            toWebp: async (options: { quality?: number } = {}): Promise<Buffer> => {
+            toWebp: async ({ quality = 80 }: { quality?: number } = {}): Promise<Buffer> => {
                 const obs = await this.client.observe({ screen: true });
-                const width = obs.width ?? this.console.width;
-                const height = obs.height ?? this.console.height;
-                const rawBuffer = obs.screenBuffer ?? Buffer.alloc(width * height * 4);
+                if (!obs.screen) {
+                    throw new Error('Screen buffer not available in observation');
+                }
+                const { width, height, buffer } = obs.screen;
 
-                return sharp(rawBuffer, {
+                return sharp(buffer, {
                     raw: { width, height, channels: 4 },
                 })
-                    .webp({ quality: options.quality ?? 80 })
+                    .webp({ quality })
                     .toBuffer();
             },
 

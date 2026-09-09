@@ -111,7 +111,8 @@ test('Mgba Public Modernized Facade Suite', async (t) => {
                 ],
             });
             assert.equal(obs.frameIndex, 10);
-            assert.ok(obs.screenBuffer);
+            assert.ok(obs.screen);
+            assert.ok(Buffer.isBuffer(obs.screen.buffer));
             assert.equal(typeof obs.data['entryPoint'], 'number');
         } finally {
             await emu.close();
@@ -475,7 +476,8 @@ test('Mgba Public Modernized Facade Suite', async (t) => {
             });
 
             assert.equal(obs.frameIndex, 15);
-            assert.ok(Buffer.isBuffer(obs.screenBuffer));
+            assert.ok(obs.screen);
+            assert.ok(Buffer.isBuffer(obs.screen.buffer));
             assert.ok(obs.memory);
             assert.equal(obs.memory.readU8(0xC100), 0x77);
             assert.equal(obs.data['marker'], 0x77);

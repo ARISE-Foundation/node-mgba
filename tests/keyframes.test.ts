@@ -135,9 +135,9 @@ test('Keyframe Pipeline & Action Anchor Invariants', async (t) => {
 
         assert.ok(result.actionsExecuted > 0);
         assert.ok(result.turnResult !== undefined, 'result.turnResult must be defined');
-        assert.ok(Array.isArray(result.keyframes), 'result.keyframes must be an array');
-        assert.ok(result.keyframes.length >= 2, 'Must capture at least pre_action and post_action');
-        assert.equal(result.keyframes[0].triggerReason, 'pre_action');
+        assert.ok(Array.isArray(result.turnResult.keyframes), 'result.turnResult.keyframes must be an array');
+        assert.ok(result.turnResult.keyframes.length >= 2, 'Must capture at least pre_action and post_action');
+        assert.equal(result.turnResult.keyframes[0].triggerReason, 'pre_action');
 
         await controller.close();
     });

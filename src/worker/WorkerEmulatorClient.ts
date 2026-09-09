@@ -947,8 +947,12 @@ export class WorkerEmulatorClient extends EventEmitter {
             slices: options.slices,
         });
 
-        const screenBuffer = res.screenBuffer
-            ? toNodeBuffer(res.screenBuffer)
+        const screen = res.screen
+            ? {
+                buffer: toNodeBuffer(res.screen.buffer),
+                width: res.screen.width,
+                height: res.screen.height,
+            }
             : undefined;
         let memoryReader: MemorySnapshotReader | undefined;
 
@@ -991,9 +995,7 @@ export class WorkerEmulatorClient extends EventEmitter {
         return {
             frameIndex: res.frameIndex,
             timestamp: res.timestamp,
-            screenBuffer,
-            width: res.width,
-            height: res.height,
+            screen,
             memory: memoryReader,
             data,
             slices,
