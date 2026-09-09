@@ -1,6 +1,6 @@
 {
   "name": "node-mgba",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "packageManager": "pnpm@10.19.0",
   "description": "Scriptable, headless Game Boy and GBA emulator for Node.js powered by libmgba",
   "type": "module",
@@ -28,7 +28,8 @@
     "pokemon"
   ],
   "os": [
-    "linux"
+    "linux",
+    "win32"
   ],
   "cpu": [
     "x64"
@@ -37,6 +38,7 @@
     "dist/src",
     "dist/plugins",
     "native/libmgba_shim.so",
+    "native/mgba_shim.dll",
     "vendor/mgba-dist/lib/libmgba.so*",
     "README.md",
     "LICENSE"

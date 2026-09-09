@@ -12,9 +12,10 @@ import type {
 } from '../types/MemoryRegion.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const shimFilename = process.platform === 'win32' ? 'mgba_shim.dll' : 'libmgba_shim.so';
 const candidatePaths = [
-    path.resolve(__dirname, '../../../native/libmgba_shim.so'), // Compiled dist/src/core/
-    path.resolve(__dirname, '../../native/libmgba_shim.so'),    // Source src/core/
+    path.resolve(__dirname, `../../../native/${shimFilename}`), // Compiled dist/src/core/
+    path.resolve(__dirname, `../../native/${shimFilename}`),    // Source src/core/
 ];
 let nativeLibPath = '';
 for (const cand of candidatePaths) {
@@ -25,7 +26,7 @@ for (const cand of candidatePaths) {
 }
 if (!nativeLibPath) {
     throw new Error(
-        `Failed to locate libmgba_shim.so. Looked in: ${candidatePaths.join(', ')}. ` +
+        `Failed to locate ${shimFilename}. Looked in: ${candidatePaths.join(', ')}. ` +
         'Ensure the native library has been built via "pnpm run build:native".',
     );
 }
