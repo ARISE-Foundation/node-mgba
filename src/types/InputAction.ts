@@ -7,7 +7,7 @@ export const GB_AUDIO_SAMPLE_RATE = 131072;
 
 export const DEFAULT_HOLD_FRAMES = 16;
 export const DEFAULT_RELEASE_FRAMES = 8;
-export const DEFAULT_POST_STABILIZATION_FRAMES = 16;
+export const DEFAULT_POST_STABILIZATION_FRAMES = 0;
 
 export interface ExecuteSequenceOptions {
     readonly timeoutMs?: number | undefined;
