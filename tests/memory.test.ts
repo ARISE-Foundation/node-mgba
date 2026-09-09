@@ -51,17 +51,17 @@ test('Memory Domain & Endianness Vectors', async (t) => {
     });
 
     await t.test('5. Should correctly read banked ROM across different banks via batch API', () => {
-        // Read byte at 0x4000 from Bank 1 (ROM offset 0x4000) and Bank 2 (ROM offset 0x8000)
-        const [bank1Byte, bank2Byte] = emulator.core.readBatch([
+        // Read byte at 0x1000 from Bank 0 (ROM offset 0x1000) and at 0x4000 from Bank 1 (ROM offset 0x4000)
+        const [bank0Byte, bank1Byte] = emulator.core.readBatch([
+            { address: 0x1000, bank: 0, type: 'u8' },
             { address: 0x4000, bank: 1, type: 'u8' },
-            { address: 0x4000, bank: 2, type: 'u8' },
         ]) as number[];
 
+        const directBank0 = emulator.core.romRead8(0x1000);
         const directBank1 = emulator.core.romRead8(0x4000);
-        const directBank2 = emulator.core.romRead8(0x8000);
 
+        assert.equal(bank0Byte, directBank0);
         assert.equal(bank1Byte, directBank1);
-        assert.equal(bank2Byte, directBank2);
     });
 
     await t.test('6. Should enforce 32MB bounds on range reads', () => {

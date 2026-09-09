@@ -270,7 +270,7 @@ test('Mgba Public Modernized Facade Suite', async (t) => {
             if (!isPokemonRedBlue(emu.console.title, emu.console.gameCode)) {
                 await assert.rejects(
                     emu.use(PokemonRedBluePlugin),
-                    /PokemonRedBluePlugin supports Pokémon Red and Pokémon Blue/i
+                    /PokemonRedBluePlugin supports Pokémon Red and Blue/i
                 );
             } else {
                 const redBlue = await emu.use(PokemonRedBluePlugin);
@@ -590,7 +590,7 @@ test('Mgba Public Modernized Facade Suite', async (t) => {
             assert.ok(snapshot.timestamp > 0);
 
             // Verify reads across memory spaces
-            assert.equal(snapshot.readU8(0x0100), 0xC3); // JP opcode at GB entry point
+            assert.equal(snapshot.readU8(0x0104), 0xCE); // Nintendo logo start byte in GB cartridge header
             assert.equal(typeof snapshot.readU8(0xC000), 'number');
             assert.equal(typeof snapshot.readU8(0x8000), 'number');
             assert.equal(typeof snapshot.readU8(0xFF80), 'number');

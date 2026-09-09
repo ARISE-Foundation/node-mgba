@@ -84,37 +84,32 @@ export function getPokemonRomPath(): string {
 }
 
 /**
- * Checks if a valid Game Boy test ROM is accessible via ROM_PATH or pokemon_blue.gb.
+ * Checks if a valid Game Boy test ROM is accessible via ROM_PATH or homebrew fixture.
  */
 export function hasTestRom(): boolean {
     const envPath = process.env['ROM_PATH'];
     if (envPath && fs.existsSync(envPath) && !envPath.toLowerCase().endsWith('.gba')) return true;
-    const fixtureRom = resolveRootFixturePath('pokemon_blue.gb');
-    if (fs.existsSync(fixtureRom)) return true;
     return fs.existsSync(getHomebrewGbRomPath());
 }
 
 /**
- * Resolves the Game Boy test ROM path from ROM_PATH or pokemon_blue.gb.
+ * Resolves the Game Boy test ROM path from ROM_PATH or homebrew fixture.
  */
 export function getTestRom(): RomValidationResult {
     let romPath = process.env['ROM_PATH'];
     if (romPath && romPath.toLowerCase().endsWith('.gba')) {
         romPath = undefined;
     }
-    const fixtureRom = resolveRootFixturePath('pokemon_blue.gb');
     const homebrewRom = getHomebrewGbRomPath();
 
     if (!romPath || romPath.trim() === '') {
-        if (fs.existsSync(fixtureRom)) {
-            romPath = fixtureRom;
-        } else if (fs.existsSync(homebrewRom)) {
+        if (fs.existsSync(homebrewRom)) {
             romPath = homebrewRom;
         }
     }
 
     if (!romPath || !fs.existsSync(romPath)) {
-        throw new Error('Game Boy test ROM fixture not found. Set ROM_PATH or provide fixtures/pokemon_blue.gb');
+        throw new Error(`Game Boy test ROM fixture not found at "${homebrewRom}" or via ROM_PATH`);
     }
 
     const stat = fs.statSync(romPath);

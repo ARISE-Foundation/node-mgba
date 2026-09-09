@@ -1,11 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { MessageChannel } from 'node:worker_threads';
 import {
     EmulatorController,
-    PokemonRedBluePlugin,
     LifecycleError,
     type VideoPacket,
     type MediaSink,
@@ -13,9 +10,12 @@ import {
 import { WorkerEmulatorClient } from '../src/worker/WorkerEmulatorClient.js';
 import { hasTestRom, getTestRomPath } from './helpers/rom.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const ROM_PATH = hasTestRom() ? getTestRomPath() : path.resolve(__dirname, '../fixtures/pokemon_blue.gb');
+class DummyPlugin {
+    public static readonly pluginName = 'dummy-plugin';
+    constructor(public readonly emu: unknown) {}
+}
+
+const ROM_PATH = getTestRomPath();
 
 describe('EmulatorController Lifecycle & DX Suite', { skip: !hasTestRom() }, () => {
     it('1. Uninitialized controller strictly rejects all ready-only methods and getters with LifecycleError', async () => {
@@ -85,7 +85,7 @@ describe('EmulatorController Lifecycle & DX Suite', { skip: !hasTestRom() }, () 
                 (err: unknown) => err instanceof LifecycleError && err.message.includes('reset'),
             );
             await assert.rejects(
-                () => controller.use(PokemonRedBluePlugin),
+                () => controller.use(DummyPlugin),
                 (err: unknown) => err instanceof LifecycleError && err.message.includes('use'),
             );
 
@@ -272,18 +272,23 @@ describe('EmulatorController Lifecycle & DX Suite', { skip: !hasTestRom() }, () 
         try {
             await controller.initialize();
 
-            const instance1 = await controller.use(PokemonRedBluePlugin);
-            const instance2 = await controller.use(PokemonRedBluePlugin);
+            class TestPlugin {
+                public static readonly pluginName = 'test-plugin';
+                constructor(public readonly emu: unknown) {}
+            }
+
+            const instance1 = await controller.use(TestPlugin);
+            const instance2 = await controller.use(TestPlugin);
             assert.equal(instance1, instance2, 'Expected identical plugin instance on duplicate use() call');
 
             // Create a different class with identical pluginName
             class ConflictingPlugin {
-                public static readonly pluginName = 'pokemon-red-blue';
-                constructor(_emu: unknown) {}
+                public static readonly pluginName = 'test-plugin';
+                constructor(public readonly emu: unknown) {}
             }
 
             await assert.rejects(
-                () => controller.use(ConflictingPlugin as unknown as typeof PokemonRedBluePlugin),
+                () => controller.use(ConflictingPlugin as unknown as typeof TestPlugin),
                 (err: unknown) => err instanceof Error && err.message.includes('already installed with a different class definition'),
             );
         } finally {
