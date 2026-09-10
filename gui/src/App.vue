@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useEmulatorSocket } from './composables/useEmulatorSocket.js';
 
 import ScreenView from './components/ScreenView.vue';
+import RomManager from './components/RomManager.vue';
 import SavestateManager from './components/SavestateManager.vue';
 import VirtualController from './components/VirtualController.vue';
 import PartyInspector from './components/PartyInspector.vue';
@@ -10,6 +11,7 @@ import InventoryInspector from './components/InventoryInspector.vue';
 import WorldInspector from './components/WorldInspector.vue';
 import ScreenTextInspector from './components/ScreenTextInspector.vue';
 import SequenceRunner from './components/SequenceRunner.vue';
+import RomInfoInspector from './components/RomInfoInspector.vue';
 
 const {
     isConnected,
@@ -22,6 +24,7 @@ const {
     frameCounter,
     keyframes,
     savestates,
+    roms,
     lastTurnResult,
     toasts,
     showToast,
@@ -37,10 +40,78 @@ const {
     loadState,
     uploadState,
     refreshSavestates,
+    loadRom,
+    uploadRom,
+    refreshRoms,
 } = useEmulatorSocket();
 
-type TabId = 'party' | 'inventory' | 'world' | 'text' | 'sequence';
-const activeTab = ref<TabId>('party');
+interface TabItem {
+    id: string;
+    label: string;
+    icon: string;
+    badge?: string | number;
+}
+
+const availableTabs = computed<TabItem[]>(() => {
+    const tabs: TabItem[] = [];
+
+    if (gameState.value?.party !== undefined) {
+        tabs.push({
+            id: 'party',
+            label: 'Party & Box',
+            icon: '🐾',
+            badge: gameState.value.party.length,
+        });
+    }
+
+    if (gameState.value?.inventory !== undefined || gameState.value?.storedItems !== undefined) {
+        tabs.push({
+            id: 'inventory',
+            label: 'Bag & PC',
+            icon: '🎒',
+            badge: (gameState.value?.inventory?.length ?? 0) + (gameState.value?.storedItems?.length ?? 0),
+        });
+    }
+
+    if (gameState.value?.map !== undefined) {
+        tabs.push({
+            id: 'world',
+            label: 'World & NPCs',
+            icon: '🗺️',
+            badge: gameState.value.map.objects?.length ?? 0,
+        });
+    }
+
+    if (gameState.value?.screenText !== undefined || gameState.value?.rawText !== undefined) {
+        tabs.push({
+            id: 'text',
+            label: 'Screen Text',
+            icon: '💬',
+        });
+    }
+
+    tabs.push({
+        id: 'sequence',
+        label: 'Sequence Runner',
+        icon: '⚡',
+    });
+
+    tabs.push({
+        id: 'info',
+        label: 'ROM & System',
+        icon: '💾',
+    });
+
+    return tabs;
+});
+
+const activeTab = ref<string>('sequence');
+
+watch(availableTabs, (newTabs) => {
+    if (!newTabs.some(t => t.id === activeTab.value)) {
+        activeTab.value = newTabs[0]?.id ?? 'sequence';
+    }
+}, { immediate: true });
 </script>
 
 <template>
@@ -98,6 +169,15 @@ const activeTab = ref<TabId>('party');
           @reset="reset"
         />
 
+        <RomManager
+          :current-rom="romInfo"
+          :roms="roms"
+          @load-rom="loadRom"
+          @upload-rom="uploadRom"
+          @refresh="refreshRoms"
+          @error="(msg) => showToast(msg, false)"
+        />
+
         <SavestateManager
           :savestates="savestates"
           @quick-save="quickSave"
@@ -116,42 +196,24 @@ const activeTab = ref<TabId>('party');
 
       <!-- Right Column: State & Telemetry Inspector (7 Cols) -->
       <div class="lg:col-span-7 flex flex-col space-y-4">
-        <!-- Navigation Tab Header -->
+        <!-- Dynamic Navigation Tab Header -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-1.5 shadow-xl flex space-x-2 text-xs font-semibold select-none overflow-x-auto">
           <button
-            class="px-3 py-2 rounded-lg transition whitespace-nowrap"
-            :class="activeTab === 'party' ? 'bg-slate-800 text-cyan-300 font-bold border border-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
-            @click="activeTab = 'party'"
+            v-for="tab in availableTabs"
+            :key="tab.id"
+            class="px-3 py-2 rounded-lg transition whitespace-nowrap flex items-center space-x-1.5"
+            :class="activeTab === tab.id ? 'bg-slate-800 text-cyan-300 font-bold border border-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+            @click="activeTab = tab.id"
           >
-            🐾 Party & Box (<span>{{ gameState?.party?.length ?? 0 }}</span>)
-          </button>
-          <button
-            class="px-3 py-2 rounded-lg transition whitespace-nowrap"
-            :class="activeTab === 'inventory' ? 'bg-slate-800 text-cyan-300 font-bold border border-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
-            @click="activeTab = 'inventory'"
-          >
-            🎒 Bag & PC (<span>{{ (gameState?.inventory?.length ?? 0) + (gameState?.storedItems?.length ?? 0) }}</span>)
-          </button>
-          <button
-            class="px-3 py-2 rounded-lg transition whitespace-nowrap"
-            :class="activeTab === 'world' ? 'bg-slate-800 text-cyan-300 font-bold border border-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
-            @click="activeTab = 'world'"
-          >
-            🗺️ World & NPCs (<span>{{ gameState?.map?.objects?.length ?? 0 }}</span>)
-          </button>
-          <button
-            class="px-3 py-2 rounded-lg transition whitespace-nowrap"
-            :class="activeTab === 'text' ? 'bg-slate-800 text-cyan-300 font-bold border border-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
-            @click="activeTab = 'text'"
-          >
-            💬 Screen Text
-          </button>
-          <button
-            class="px-3 py-2 rounded-lg transition whitespace-nowrap"
-            :class="activeTab === 'sequence' ? 'bg-slate-800 text-cyan-300 font-bold border border-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
-            @click="activeTab = 'sequence'"
-          >
-            ⚡ Sequence Runner
+            <span>{{ tab.icon }}</span>
+            <span>{{ tab.label }}</span>
+            <span
+              v-if="tab.badge !== undefined"
+              class="ml-1 px-1.5 py-0.5 rounded-full text-[10px]"
+              :class="activeTab === tab.id ? 'bg-cyan-950 text-cyan-300 border border-cyan-800' : 'bg-slate-800 text-slate-400'"
+            >
+              {{ tab.badge }}
+            </span>
           </button>
         </div>
 
@@ -193,6 +255,17 @@ const activeTab = ref<TabId>('party');
           :keyframes="keyframes"
           @run-sequence="stepSequence"
           @error="(msg) => showToast(msg, false)"
+        />
+
+        <!-- Tab Content 6: ROM & System Diagnostics -->
+        <RomInfoInspector
+          v-else-if="activeTab === 'info'"
+          :rom-info="romInfo"
+          :roms="roms"
+          :fps="fps"
+          :frame-counter="frameCounter"
+          :is-looping="isLooping"
+          @load-rom="loadRom"
         />
       </div>
     </main>

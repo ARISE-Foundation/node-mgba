@@ -12,7 +12,7 @@ import {
     type InputAction,
     type ButtonName,
 } from '../src/index.js';
-import { PokemonRedBluePlugin, type PokemonRedBlueState } from '../src/plugins/pokemonRedBlue.js';
+import { PokemonRedBluePlugin, isPokemonRedBlue, type PokemonRedBlueState } from '../src/plugins/pokemonRedBlue.js';
 
 const PORT = 3456;
 const STATE_FILE = '/tmp/lean_mgba_gui_state.state';
@@ -25,6 +25,7 @@ interface ClientMessage {
     fps?: number;
     filePath?: string;
     stateBase64?: string;
+    romBase64?: string;
     filename?: string;
     muted?: boolean;
 }
@@ -50,9 +51,17 @@ interface KeyframePayload {
 }
 
 async function main() {
-    const romPath = process.env['ROM_PATH'];
+    let romPath = process.env['ROM_PATH'] || process.argv[2];
     if (!romPath || romPath.trim().length === 0) {
-        console.error('[node-mgba GUI] Error: ROM_PATH environment variable is required. Example: ROM_PATH="fixtures/pokemon_blue.gb" pnpm gui');
+        const defaultCandidates = [
+            path.resolve('fixtures/super_mario_bros.gba'),
+            path.resolve('fixtures/pokemon_blue.gb'),
+            path.resolve('fixtures/super_mario_advance_4.gba'),
+        ];
+        romPath = defaultCandidates.find(p => fs.existsSync(p)) ?? '';
+    }
+    if (!romPath) {
+        console.error('[node-mgba GUI] Error: No valid ROM found. Specify ROM_PATH="path/to/rom.gba" or pass as argument: pnpm gui <path>');
         process.exit(1);
     }
     const absoluteRomPath = path.resolve(romPath);
@@ -145,7 +154,12 @@ async function main() {
         mediaSinks: [wsMediaSink],
     });
 
+    let romInfo: RomInfo | undefined = undefined;
+
     async function getGameState(): Promise<PokemonRedBlueState | undefined> {
+        if (!romInfo || !isPokemonRedBlue(romInfo.title, romInfo.gameCode)) {
+            return undefined;
+        }
         try {
             const obs = await controller.observe({ memory: { vram: true } });
             if (obs.memory) {
@@ -203,7 +217,7 @@ async function main() {
             measuredFps = 1000 / delta;
         }
 
-        if (!isObservingGameState) {
+        if (!isObservingGameState && romInfo && isPokemonRedBlue(romInfo.title, romInfo.gameCode)) {
             isObservingGameState = true;
             getGameState()
                 .then((state) => {
@@ -222,7 +236,6 @@ async function main() {
     controller.on('start', () => broadcast({ type: 'loopStatus', isLooping: true }));
     controller.on('pause', () => broadcast({ type: 'loopStatus', isLooping: false }));
 
-    let romInfo: RomInfo;
     try {
         romInfo = await controller.initialize();
         console.log(`[node-mgba GUI] Loaded ${romInfo.title} (${romInfo.platform})`);
@@ -525,6 +538,120 @@ async function main() {
                             type: 'savestateList',
                             savestates: discovered,
                         }));
+                        break;
+                    }
+
+                    case 'listRoms': {
+                        const discovered: { name: string; path: string; size: number; platform: string }[] = [];
+                        const candidateDirs = [
+                            path.resolve('fixtures'),
+                            path.resolve('../fixtures'),
+                            path.resolve('../node-mgba/fixtures'),
+                            '/tmp',
+                        ];
+
+                        const seen = new Set<string>();
+                        for (const dir of candidateDirs) {
+                            if (fs.existsSync(dir)) {
+                                const files = fs.readdirSync(dir);
+                                for (const f of files) {
+                                    const lower = f.toLowerCase();
+                                    if (lower.endsWith('.gba') || lower.endsWith('.gb') || lower.endsWith('.gbc')) {
+                                        const fullPath = path.join(dir, f);
+                                        if (seen.has(fullPath)) continue;
+                                        seen.add(fullPath);
+                                        const stats = fs.statSync(fullPath);
+                                        const platform = lower.endsWith('.gba') ? 'GBA' : 'GB';
+                                        discovered.push({
+                                            name: f,
+                                            path: fullPath,
+                                            size: stats.size,
+                                            platform,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+
+                        ws.send(JSON.stringify({
+                            type: 'romList',
+                            roms: discovered,
+                        }));
+                        break;
+                    }
+
+                    case 'loadRom': {
+                        if (msg.filePath) {
+                            const targetPath = path.resolve(msg.filePath);
+                            if (!fs.existsSync(targetPath)) {
+                                ws.send(JSON.stringify({
+                                    type: 'toast',
+                                    success: false,
+                                    message: `ROM not found: ${path.basename(targetPath)}`,
+                                }));
+                                break;
+                            }
+
+                            try {
+                                romInfo = await controller.loadROM(targetPath);
+                                cachedGameState = await getGameState();
+                                latestFrame = await controller.step(1);
+                                broadcast({
+                                    type: 'romLoaded',
+                                    romInfo,
+                                    frame: getFramePayload(latestFrame, cachedGameState),
+                                    gameState: cachedGameState,
+                                    isLooping: controller.isPlaybackRunning(),
+                                });
+                                broadcast({
+                                    type: 'toast',
+                                    success: true,
+                                    message: `Loaded ${romInfo.title} (${romInfo.platform})`,
+                                });
+                            } catch (err) {
+                                console.error('[node-mgba GUI] Failed to load ROM:', err);
+                                ws.send(JSON.stringify({
+                                    type: 'toast',
+                                    success: false,
+                                    message: `Error loading ROM: ${err instanceof Error ? err.message : String(err)}`,
+                                }));
+                            }
+                        }
+                        break;
+                    }
+
+                    case 'uploadRom': {
+                        if (msg.romBase64) {
+                            const buffer = Buffer.from(msg.romBase64, 'base64');
+                            const filename = path.basename(msg.filename ?? 'uploaded.gba');
+                            const targetPath = path.join('/tmp', filename);
+                            fs.writeFileSync(targetPath, buffer);
+
+                            try {
+                                romInfo = await controller.loadROM(targetPath);
+                                cachedGameState = await getGameState();
+                                latestFrame = await controller.step(1);
+                                broadcast({
+                                    type: 'romLoaded',
+                                    romInfo,
+                                    frame: getFramePayload(latestFrame, cachedGameState),
+                                    gameState: cachedGameState,
+                                    isLooping: controller.isPlaybackRunning(),
+                                });
+                                broadcast({
+                                    type: 'toast',
+                                    success: true,
+                                    message: `Uploaded & loaded ${romInfo.title} (${romInfo.platform})`,
+                                });
+                            } catch (err) {
+                                console.error('[node-mgba GUI] Failed to load uploaded ROM:', err);
+                                ws.send(JSON.stringify({
+                                    type: 'toast',
+                                    success: false,
+                                    message: `Error loading uploaded ROM: ${err instanceof Error ? err.message : String(err)}`,
+                                }));
+                            }
+                        }
                         break;
                     }
 

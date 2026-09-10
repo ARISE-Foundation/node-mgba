@@ -5,6 +5,7 @@ import type {
     FramePayload,
     KeyframePayload,
     SavestateEntry,
+    RomEntry,
     TurnResultPayload,
     ToastNotification,
     AudioPayload,
@@ -23,6 +24,7 @@ export function useEmulatorSocket() {
     const frameCounter = ref(0);
     const keyframes = ref<KeyframePayload[]>([]);
     const savestates = ref<SavestateEntry[]>([]);
+    const roms = ref<RomEntry[]>([]);
     const lastTurnResult = ref<TurnResultPayload | null>(null);
     const toasts = ref<ToastNotification[]>([]);
 
@@ -202,6 +204,22 @@ export function useEmulatorSocket() {
             showToast(String(msg['message'] ?? ''), Boolean(msg['success'] ?? true));
         } else if (type === 'savestateList') {
             savestates.value = (msg['savestates'] as SavestateEntry[]) || [];
+        } else if (type === 'romList') {
+            roms.value = (msg['roms'] as RomEntry[]) || [];
+        } else if (type === 'romLoaded') {
+            if (msg['romInfo']) {
+                romInfo.value = msg['romInfo'] as RomInfo;
+            }
+            if (msg['frame']) {
+                latestFrame.value = msg['frame'] as FramePayload;
+                frameCounter.value = (msg['frame'] as FramePayload).frameIndex;
+            }
+            gameState.value = (msg['gameState'] as PokemonRedBlueState) || null;
+            if (typeof msg['isLooping'] === 'boolean') {
+                isLooping.value = msg['isLooping'];
+            }
+            sendWs({ type: 'listSavestates' });
+            sendWs({ type: 'listRoms' });
         }
     }
 
@@ -220,6 +238,7 @@ export function useEmulatorSocket() {
             isConnected.value = true;
             sendWs({ type: 'init' });
             sendWs({ type: 'listSavestates' });
+            sendWs({ type: 'listRoms' });
             sendWs({ type: 'setMute', muted: isMuted.value });
         };
 
@@ -298,6 +317,18 @@ export function useEmulatorSocket() {
         sendWs({ type: 'listSavestates' });
     }
 
+    function loadRom(filePath: string): void {
+        sendWs({ type: 'loadRom', filePath });
+    }
+
+    function uploadRom(filename: string, romBase64: string): void {
+        sendWs({ type: 'uploadRom', filename, romBase64 });
+    }
+
+    function refreshRoms(): void {
+        sendWs({ type: 'listRoms' });
+    }
+
     onMounted(() => {
         connect();
     });
@@ -321,6 +352,7 @@ export function useEmulatorSocket() {
         frameCounter,
         keyframes,
         savestates,
+        roms,
         lastTurnResult,
         toasts,
         showToast,
@@ -338,6 +370,9 @@ export function useEmulatorSocket() {
         loadState,
         uploadState,
         refreshSavestates,
+        loadRom,
+        uploadRom,
+        refreshRoms,
     };
 }
 

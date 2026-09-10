@@ -22,6 +22,8 @@ const keyMap: Record<string, ButtonName> = {
     'KeyJ': 'A',
     'KeyX': 'B',
     'KeyK': 'B',
+    'KeyQ': 'L',
+    'KeyE': 'R',
     'Enter': 'START',
     'ShiftRight': 'SELECT',
     'ShiftLeft': 'SELECT',
@@ -78,6 +80,41 @@ onUnmounted(() => {
   <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col items-center select-none">
     <div class="text-xs text-slate-500 font-semibold mb-3 tracking-wider uppercase">
       Hardware Controller (Live Responsive)
+    </div>
+
+    <!-- Shoulder Buttons (L / R) -->
+    <div class="w-full flex items-center justify-between px-6 mb-3">
+      <div class="flex flex-col items-center">
+        <button
+          class="px-5 py-1.5 bg-slate-800 hover:bg-slate-700 active:bg-cyan-600 rounded-t-lg border-t-2 border-x border-slate-700 text-xs font-bold text-slate-300 shadow transition font-mono"
+          :class="{ '!bg-cyan-600 !text-white': activeButtons.has('L') }"
+          title="Left Shoulder Button (Q)"
+          @mousedown="handleButtonDown('L')"
+          @mouseup="handleButtonUp('L')"
+          @mouseleave="handleButtonUp('L')"
+          @touchstart.prevent="handleButtonDown('L')"
+          @touchend.prevent="handleButtonUp('L')"
+        >
+          [ L ]
+        </button>
+        <span class="text-[9px] text-slate-500 font-mono mt-0.5">Key: Q</span>
+      </div>
+
+      <div class="flex flex-col items-center">
+        <button
+          class="px-5 py-1.5 bg-slate-800 hover:bg-slate-700 active:bg-cyan-600 rounded-t-lg border-t-2 border-x border-slate-700 text-xs font-bold text-slate-300 shadow transition font-mono"
+          :class="{ '!bg-cyan-600 !text-white': activeButtons.has('R') }"
+          title="Right Shoulder Button (E)"
+          @mousedown="handleButtonDown('R')"
+          @mouseup="handleButtonUp('R')"
+          @mouseleave="handleButtonUp('R')"
+          @touchstart.prevent="handleButtonDown('R')"
+          @touchend.prevent="handleButtonUp('R')"
+        >
+          [ R ]
+        </button>
+        <span class="text-[9px] text-slate-500 font-mono mt-0.5">Key: E</span>
+      </div>
     </div>
 
     <div class="w-full flex items-center justify-between px-4">

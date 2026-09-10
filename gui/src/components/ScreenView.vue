@@ -66,9 +66,15 @@ onMounted(() => {
     <div class="relative bg-slate-800 rounded-lg p-2 border-2 border-slate-700 shadow-inner flex items-center justify-center">
       <canvas
         ref="canvasRef"
-        width="160"
-        height="144"
-        class="pixelated w-[320px] h-[288px] bg-slate-950 rounded"
+        :width="frame?.width ?? 160"
+        :height="frame?.height ?? 144"
+        :style="{
+          width: `${(frame?.width ?? 160) * 2}px`,
+          maxWidth: '100%',
+          aspectRatio: `${frame?.width ?? 160} / ${frame?.height ?? 144}`,
+          height: 'auto',
+        }"
+        class="pixelated bg-slate-950 rounded shadow-md"
       />
       <div
         v-if="!frame"

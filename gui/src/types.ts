@@ -45,6 +45,13 @@ export interface SavestateEntry {
     readonly size: number;
 }
 
+export interface RomEntry {
+    readonly name: string;
+    readonly path: string;
+    readonly size: number;
+    readonly platform: string;
+}
+
 export interface TurnResultPayload {
     readonly type: 'turnResult';
     readonly executionTimeMs: number;
