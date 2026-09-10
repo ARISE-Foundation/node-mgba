@@ -25,8 +25,14 @@ export interface CanvasStreamRendererOptions {
     readonly defaultHeight?: number;
 }
 
+export type WebAudioPlayerMode = 'realtime' | 'buffered';
+
 export interface WebAudioPlayerOptions {
+    readonly mode?: WebAudioPlayerMode;
     readonly jitterBufferSeconds?: number;
     readonly defaultVolume?: number;
     readonly enableLogging?: boolean;
+    readonly maxLeadSeconds?: number | null;
+    readonly adaptiveRate?: boolean;
 }
+

@@ -5,4 +5,6 @@ export type {
     BrowserAudioPacket,
     CanvasStreamRendererOptions,
     WebAudioPlayerOptions,
+    WebAudioPlayerMode,
 } from './types.js';
+

@@ -333,4 +333,32 @@ test('WebAudioPlayer Suite', async (t) => {
         // No new nodes should be scheduled while suspended
         assert.equal(ctx.createdSourceNodes.length, 1);
     });
+
+    await t.test('9. mode: "buffered" should retain all chunks in a fast burst without dropping lead or altering playbackRate', () => {
+        const player = new WebAudioPlayer({ mode: 'buffered', defaultVolume: 1.0 });
+        const ctx = player.getAudioContext() as unknown as MockAudioContext;
+
+        const packet: BrowserAudioPacket = {
+            type: 'audio',
+            frameIndex: 1,
+            pts: 0.016,
+            sampleRate: 48000,
+            channels: 2,
+            sampleFrames: 4800, // 100ms chunk
+            buffer: new Uint8Array(4800 * 4),
+        };
+
+        // Schedule 10 chunks of 100ms each in a fast burst (total 1000ms lead)
+        for (let i = 0; i < 10; i++) {
+            player.playChunk(packet);
+        }
+
+        // All 10 nodes must be created and active (none stopped or disconnected)
+        assert.equal(ctx.createdSourceNodes.length, 10);
+        for (const node of ctx.createdSourceNodes) {
+            assert.equal(node.isStopped, false, 'Node in buffered mode must not be stopped');
+            assert.equal(node.playbackRate.value, 1.0, 'Playback rate in buffered mode must remain exactly 1.0');
+        }
+    });
 });
+

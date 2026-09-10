@@ -1,12 +1,15 @@
-import type { BrowserAudioPacket, WebAudioPlayerOptions } from './types.js';
+import type { BrowserAudioPacket, WebAudioPlayerMode, WebAudioPlayerOptions } from './types.js';
 
 export class WebAudioPlayer {
+    public readonly mode: WebAudioPlayerMode;
     private audioCtx: AudioContext | null = null;
     private masterGain: GainNode | null = null;
     private nextPlayTime = 0;
     private readonly activeNodes = new Set<AudioBufferSourceNode>();
     private readonly jitterBufferSeconds: number;
     private readonly enableLogging: boolean;
+    private readonly maxLeadSeconds: number | null;
+    private readonly adaptiveRate: boolean;
     private currentVolume: number;
     private fractionalPhase = 0;
     private prevL = 0;
@@ -23,9 +26,16 @@ export class WebAudioPlayer {
     private tempRight: Float32Array | null = null;
 
     constructor(options: WebAudioPlayerOptions = {}) {
-        this.jitterBufferSeconds = options.jitterBufferSeconds ?? 0.15; // 150ms default jitter cushion (~9 frames)
+        this.mode = options.mode ?? 'realtime';
+        this.jitterBufferSeconds = options.jitterBufferSeconds ?? (this.mode === 'buffered' ? 0.04 : 0.15);
         this.currentVolume = Math.max(0, Math.min(1, options.defaultVolume ?? 1.0));
         this.enableLogging = options.enableLogging ?? false;
+        this.maxLeadSeconds = options.maxLeadSeconds !== undefined
+            ? options.maxLeadSeconds
+            : (this.mode === 'buffered' ? null : 0.35);
+        this.adaptiveRate = options.adaptiveRate !== undefined
+            ? options.adaptiveRate
+            : (this.mode === 'realtime');
     }
 
     public get volume(): number {
@@ -232,12 +242,12 @@ export class WebAudioPlayer {
                 }
                 scheduleTime = now + targetLead;
                 playbackRate = 1.0;
-            } else if (currentLead > 0.350) {
-                // Excessive latency accumulation (>350ms): drop old schedule and restart
+            } else if (this.maxLeadSeconds !== null && currentLead > this.maxLeadSeconds) {
+                // Excessive latency accumulation: drop old schedule and restart
                 this.excessiveLeadCount++;
-                if (this.enableLogging) {
-                    console.warn(`[WebAudioPlayer] Excessive lead (${(currentLead * 1000).toFixed(1)}ms > 350ms). Resetting schedule.`);
-                }
+                console.warn(
+                    `[WebAudioPlayer] Audio lead accumulated ${(currentLead * 1000).toFixed(1)}ms > ${(this.maxLeadSeconds * 1000).toFixed(0)}ms and was reset to minimize interactive latency. If you are streaming batched turns or AI actions, initialize with { mode: 'buffered' }.`
+                );
                 this.activeNodes.forEach((node) => {
                     try {
                         node.stop();
@@ -253,16 +263,21 @@ export class WebAudioPlayer {
                 // Minor underrun (-100ms <= currentLead < 0): Play IMMEDIATELY at `now` without inserting silence gaps!
                 this.underrunCount++;
                 scheduleTime = now;
-                playbackRate = 0.996; // Gently slow down within inaudible range (0.4% / ~7 cents) to smoothly rebuild buffer
+                playbackRate = this.adaptiveRate ? 0.996 : 1.0;
             } else {
                 // Normal continuous playback: schedule back-to-back
                 scheduleTime = this.nextPlayTime;
                 // Adaptive clock drift compensation: smoothly nudge playback rate within inaudible range (±0.4% / ~7 cents)
-                const error = currentLead - targetLead;
-                if (error > 0.020) {
-                    playbackRate = Math.min(1.004, 1.0 + (error - 0.020) * 0.08);
-                } else if (error < -0.020) {
-                    playbackRate = Math.max(0.996, 1.0 + (error + 0.020) * 0.08);
+                // Only compensate drift when adaptiveRate is enabled (realtime stream). In buffered mode, preserve exact 1.000x rate.
+                if (this.adaptiveRate) {
+                    const error = currentLead - targetLead;
+                    if (error > 0.020) {
+                        playbackRate = Math.min(1.004, 1.0 + (error - 0.020) * 0.08);
+                    } else if (error < -0.020) {
+                        playbackRate = Math.max(0.996, 1.0 + (error + 0.020) * 0.08);
+                    } else {
+                        playbackRate = 1.0;
+                    }
                 } else {
                     playbackRate = 1.0;
                 }

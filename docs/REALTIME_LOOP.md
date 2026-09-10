@@ -368,8 +368,11 @@ const videoRenderer = new CanvasStreamRenderer({
 });
 videoRenderer.attach(canvas);
 
-// 2. Initialize Web Audio player with a jitter cushion
+// 2. Initialize Web Audio player:
+// - Use mode: 'realtime' (default) for interactive live play (resets buffer on >350ms lead to minimize input latency)
+// - Use mode: 'buffered' for autonomous AI/turn-based play or replays (preserves entire burst without truncation)
 const audioPlayer = new WebAudioPlayer({
+    mode: 'realtime', // or 'buffered' for turn-based agent / spectator playback
     defaultVolume: 0.8,
     jitterBufferSeconds: 0.15,
 });
