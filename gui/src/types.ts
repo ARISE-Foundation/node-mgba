@@ -70,6 +70,8 @@ export interface ToastNotification {
 
 export interface AudioPayload {
     readonly type: 'audio';
+    readonly frameIndex?: number;
+    readonly pts?: number;
     readonly sampleRate: number;
     readonly channels: number;
     readonly sampleFrames: number;

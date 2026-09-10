@@ -1,4 +1,5 @@
 import { ref, onMounted, onUnmounted } from 'vue';
+import { WebAudioPlayer } from '../../../src/browser/WebAudioPlayer.js';
 import type {
     RomInfo,
     PokemonRedBlueState,
@@ -57,91 +58,29 @@ export function useEmulatorSocket() {
         return false;
     }
 
-    let audioCtx: AudioContext | null = null;
-    let nextAudioStartTime = 0;
-    const BUFFER_AHEAD_SEC = 0.050; // 50ms low-latency jitter buffer
+    let audioPlayer: WebAudioPlayer | null = null;
 
-    function initAudioContext(): void {
-        if (!audioCtx) {
-            const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-            audioCtx = new AudioContextClass();
+    function initAudioPlayer(): WebAudioPlayer {
+        if (!audioPlayer) {
+            audioPlayer = new WebAudioPlayer({
+                jitterBufferSeconds: 0.12,
+                defaultVolume: isMuted.value ? 0 : 1.0,
+                enableLogging: false,
+            });
         }
-        if (audioCtx.state === 'suspended') {
-            void audioCtx.resume();
-        }
+        return audioPlayer;
     }
 
     function toggleMute(): void {
         isMuted.value = !isMuted.value;
         if (!isMuted.value) {
-            initAudioContext();
-            if (audioCtx && audioCtx.state === 'suspended') {
-                void audioCtx.resume();
-            }
-            nextAudioStartTime = 0;
+            const player = initAudioPlayer();
+            void player.unlock();
+            player.setVolume(1.0);
         } else {
-            nextAudioStartTime = 0;
+            audioPlayer?.setVolume(0);
         }
         sendWs({ type: 'setMute', muted: isMuted.value });
-    }
-
-    function playAudioChunk(sampleRate: number, sampleFrames: number, bufferBase64: string): void {
-        if (isMuted.value || !audioCtx) return;
-
-        try {
-            if (audioCtx.state === 'suspended') {
-                void audioCtx.resume();
-            }
-
-            const binaryStr = atob(bufferBase64);
-            const len = binaryStr.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binaryStr.charCodeAt(i);
-            }
-
-            const alignedBuffer = new ArrayBuffer(len);
-            new Uint8Array(alignedBuffer).set(bytes);
-            const int16View = new Int16Array(alignedBuffer);
-
-            const frames = sampleFrames || (int16View.length / 2);
-            if (frames === 0) return;
-
-            const rate = sampleRate > 0 ? sampleRate : 131072;
-            const audioBuffer = audioCtx.createBuffer(2, frames, rate);
-            const channelL = audioBuffer.getChannelData(0);
-            const channelR = audioBuffer.getChannelData(1);
-
-            for (let i = 0; i < frames; i++) {
-                channelL[i] = ((int16View[i * 2] ?? 0) / 32768.0) * 0.85;
-                channelR[i] = ((int16View[i * 2 + 1] ?? 0) / 32768.0) * 0.85;
-            }
-
-            const source = audioCtx.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(audioCtx.destination);
-
-            const now = audioCtx.currentTime;
-            if (nextAudioStartTime < now + 0.010 || nextAudioStartTime > now + 0.300) {
-                // If clock drifted or initial playback, sync to now + margin
-                nextAudioStartTime = now + BUFFER_AHEAD_SEC;
-            }
-
-            // Dynamic Rate Control (DRC): micro-adjust playback rate to gently track buffer target
-            const bufferAhead = nextAudioStartTime - now;
-            let playbackRate = 1.0;
-            if (bufferAhead < 0.035) {
-                playbackRate = 0.995; // gently stretch by 0.5% if buffer is slightly low
-            } else if (bufferAhead > 0.075) {
-                playbackRate = 1.005; // gently compress by 0.5% if buffer is getting high
-            }
-
-            source.playbackRate.value = playbackRate;
-            source.start(nextAudioStartTime);
-            nextAudioStartTime += audioBuffer.duration / playbackRate;
-        } catch (err) {
-            console.warn('[useEmulatorSocket] Audio playback error:', err);
-        }
     }
 
     function handleMessage(msg: Record<string, unknown>): void {
@@ -174,7 +113,18 @@ export function useEmulatorSocket() {
             }
         } else if (type === 'audio') {
             const audio = msg as unknown as AudioPayload;
-            playAudioChunk(audio.sampleRate, audio.sampleFrames, audio.bufferBase64);
+            if (!isMuted.value) {
+                const player = initAudioPlayer();
+                player.playChunk({
+                    type: 'audio',
+                    frameIndex: audio.frameIndex ?? frameCounter.value,
+                    pts: audio.pts ?? (frameCounter.value / 59.7275),
+                    channels: 2,
+                    sampleFrames: audio.sampleFrames,
+                    sampleRate: audio.sampleRate,
+                    bufferBase64: audio.bufferBase64,
+                });
+            }
         } else if (type === 'keyframe') {
             if (msg['keyframe']) {
                 const kf = msg['keyframe'] as KeyframePayload;
@@ -207,6 +157,7 @@ export function useEmulatorSocket() {
         } else if (type === 'romList') {
             roms.value = (msg['roms'] as RomEntry[]) || [];
         } else if (type === 'romLoaded') {
+            audioPlayer?.handleStreamReset();
             if (msg['romInfo']) {
                 romInfo.value = msg['romInfo'] as RomInfo;
             }
@@ -282,6 +233,7 @@ export function useEmulatorSocket() {
     }
 
     function reset(): void {
+        audioPlayer?.handleStreamReset();
         sendWs({ type: 'reset' });
     }
 
@@ -302,14 +254,17 @@ export function useEmulatorSocket() {
     }
 
     function quickLoad(): void {
+        audioPlayer?.handleStreamReset();
         sendWs({ type: 'loadState' });
     }
 
     function loadState(filePath: string): void {
+        audioPlayer?.handleStreamReset();
         sendWs({ type: 'loadState', filePath });
     }
 
     function uploadState(filename: string, stateBase64: string): void {
+        audioPlayer?.handleStreamReset();
         sendWs({ type: 'uploadState', filename, stateBase64 });
     }
 
@@ -338,6 +293,10 @@ export function useEmulatorSocket() {
         if (ws) {
             try { ws.close(); } catch { /* ignore */ }
             ws = null;
+        }
+        if (audioPlayer) {
+            audioPlayer.close();
+            audioPlayer = null;
         }
     });
 

@@ -169,6 +169,11 @@ watch(availableTabs, (newTabs) => {
           @reset="reset"
         />
 
+        <VirtualController
+          @key-down="keyDown"
+          @key-up="keyUp"
+        />
+
         <RomManager
           :current-rom="romInfo"
           :roms="roms"
@@ -186,11 +191,6 @@ watch(availableTabs, (newTabs) => {
           @upload-state="uploadState"
           @refresh="refreshSavestates"
           @error="(msg) => showToast(msg, false)"
-        />
-
-        <VirtualController
-          @key-down="keyDown"
-          @key-up="keyUp"
         />
       </div>
 

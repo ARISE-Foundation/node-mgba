@@ -6,6 +6,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import {
     EmulatorController,
     WebSocketMediaSink,
+    ResamplingMediaSink,
     KEY_MASKS,
     type VideoPacket,
     type RomInfo,
@@ -146,12 +147,18 @@ async function main() {
         },
     });
 
+    // Normalize emulator PCM (65536 Hz GBA / 32768 Hz GB) to canonical 48000 Hz
+    // before WebSocket broadcast, matching game-ai-player and mgba-ai-player pipeline.
+    const resampledSink = new ResamplingMediaSink(wsMediaSink, {
+        targetSampleRate: 48000,
+    });
+
     console.log(`[node-mgba GUI] Initializing EmulatorController in Worker Thread: ${romPath}`);
     const controller = new EmulatorController({
         romPath: absoluteRomPath,
         realtime: true,
         fps: 60,
-        mediaSinks: [wsMediaSink],
+        mediaSinks: [resampledSink],
     });
 
     let romInfo: RomInfo | undefined = undefined;
@@ -413,6 +420,7 @@ async function main() {
                         const wasRunning = controller.isPlaybackRunning();
                         if (wasRunning) await controller.pausePlayback();
                         try {
+                            resampledSink.reset();
                             await controller.reset();
                             activeKeyMask = 0;
                             await controller.setKeyMask(0);
@@ -453,6 +461,7 @@ async function main() {
                             const ok = await controller.loadState(targetPath);
                             console.log(`[node-mgba GUI] Load state from ${targetPath}: ${ok ? 'SUCCESS' : 'FAILED'}`);
                             if (ok) {
+                                resampledSink.reset();
                                 await controller.setKeyMask(activeKeyMask);
                                 latestFrame = await controller.step(1);
                                 cachedGameState = await getGameState();
@@ -487,6 +496,7 @@ async function main() {
                             try {
                                 const ok = await controller.loadState(targetPath);
                                 if (ok) {
+                                    resampledSink.reset();
                                     await controller.setKeyMask(activeKeyMask);
                                     latestFrame = await controller.step(1);
                                     const state = await getGameState();
@@ -593,6 +603,8 @@ async function main() {
                             }
 
                             try {
+                                resampledSink.reset();
+                                activeKeyMask = 0;
                                 romInfo = await controller.loadROM(targetPath);
                                 cachedGameState = await getGameState();
                                 latestFrame = await controller.step(1);
@@ -628,6 +640,8 @@ async function main() {
                             fs.writeFileSync(targetPath, buffer);
 
                             try {
+                                resampledSink.reset();
+                                activeKeyMask = 0;
                                 romInfo = await controller.loadROM(targetPath);
                                 cachedGameState = await getGameState();
                                 latestFrame = await controller.step(1);

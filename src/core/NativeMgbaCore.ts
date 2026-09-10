@@ -293,7 +293,7 @@ export class NativeMgbaCore {
             strideBytes: stride[0] ?? ((w[0] ?? 160) * 4),
         };
 
-        this.sampleRate = mgba_get_audio_sample_rate(this.handle);
+        this.updateSampleRate();
 
         return this.romInfo;
     }
@@ -326,6 +326,7 @@ export class NativeMgbaCore {
         this.ensureOpen();
         this.lastKeys = 0;
         mgba_reset(this.handle);
+        this.updateSampleRate();
     }
 
     public stepFrame(keys = 0): void {
@@ -413,6 +414,7 @@ export class NativeMgbaCore {
     }
 
     public getAudioSampleRate(): number {
+        this.updateSampleRate();
         return this.sampleRate;
     }
 
@@ -421,6 +423,8 @@ export class NativeMgbaCore {
         const maxFrames = 16384;
         const framesRead = mgba_read_audio_frames(this.handle, this.audioStagingBuffer, maxFrames);
         if (framesRead === 0) return null;
+
+        this.updateSampleRate();
 
         const byteLength = framesRead * 4;
         const chunkBuffer = Buffer.allocUnsafe(byteLength);
@@ -707,7 +711,11 @@ export class NativeMgbaCore {
 
     public loadState(filepath: string): boolean {
         this.ensureOpen();
-        return mgba_load_state(this.handle, filepath);
+        const success = mgba_load_state(this.handle, filepath);
+        if (success) {
+            this.updateSampleRate();
+        }
+        return success;
     }
 
     public saveStateBuffer(initialMaxSize = 2 * 1024 * 1024): Buffer {
@@ -728,7 +736,20 @@ export class NativeMgbaCore {
 
     public loadStateBuffer(stateBuffer: Buffer | Uint8Array): boolean {
         this.ensureOpen();
-        return mgba_load_state_buffer(this.handle, stateBuffer, stateBuffer.length);
+        const success = mgba_load_state_buffer(this.handle, stateBuffer, stateBuffer.length);
+        if (success) {
+            this.updateSampleRate();
+        }
+        return success;
+    }
+
+    private updateSampleRate(): void {
+        if (this.handle) {
+            const rate = mgba_get_audio_sample_rate(this.handle);
+            if (rate > 0) {
+                this.sampleRate = rate;
+            }
+        }
     }
 
     private ensureOpen(): void {

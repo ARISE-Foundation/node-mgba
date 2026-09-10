@@ -8,15 +8,15 @@
 // BUILD flags
 
 #ifndef BUILD_GL
-/* #undef BUILD_GL */
+#define BUILD_GL
 #endif
 
 #ifndef BUILD_GLES2
-/* #undef BUILD_GLES2 */
+#define BUILD_GLES2
 #endif
 
 #ifndef BUILD_GLES3
-/* #undef BUILD_GLES3 */
+#define BUILD_GLES3
 #endif
 
 // Miscellaneous flags

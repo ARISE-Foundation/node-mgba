@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Mgba } from '../src/index.js';
+import { Mgba, type AudioChunk } from '../src/index.js';
 import { hasGbaTestRom, getGbaTestRomPath, hasGbaSavestate, getGbaSavestatePath } from './helpers/rom.js';
 
 test('GBA ROM & Savestate Integration Suite', async (t) => {
@@ -154,6 +154,27 @@ test('GBA ROM & Savestate Integration Suite', async (t) => {
             assert.equal(webp.toString('ascii', 0, 4), 'RIFF');
             assert.equal(webp.toString('ascii', 8, 12), 'WEBP');
         } finally {
+            await emu.close();
+        }
+    });
+
+    await t.test('6. GBA audio chunk generation and dynamic sample rate handling', async () => {
+        const emu = await Mgba.load(romPath);
+        const chunks: AudioChunk[] = [];
+        const unsubscribe = emu.diagnostics.onAudioChunk((chunk: AudioChunk) => {
+            chunks.push(chunk);
+        });
+
+        try {
+            await emu.controls.wait(5);
+            assert.ok(chunks.length > 0, 'Audio chunks must be emitted during emulation');
+            for (const chunk of chunks) {
+                assert.ok(chunk.sampleRate === 32768 || chunk.sampleRate === 65536, `Expected GBA sample rate, got ${chunk.sampleRate}`);
+                assert.equal(chunk.channels, 2);
+                assert.ok(chunk.sampleFrames > 0, 'Sample frames must be positive');
+            }
+        } finally {
+            unsubscribe();
             await emu.close();
         }
     });
