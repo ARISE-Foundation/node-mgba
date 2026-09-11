@@ -10,7 +10,6 @@ import type {
     MemoryRegionName,
     ReadSpec,
 } from '../types/MemoryRegion.js';
-import { unpackMgbaPngBuffer } from '../utils/savestate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const shimFilename = process.platform === 'win32' ? 'mgba_shim.dll' : 'libmgba_shim.so';
@@ -739,13 +738,6 @@ export class NativeMgbaCore {
 
     public loadState(filepath: string): boolean {
         this.ensureOpen();
-        if (fs.existsSync(filepath)) {
-            const fileBuffer = fs.readFileSync(filepath);
-            const unpacked = unpackMgbaPngBuffer(fileBuffer);
-            if (unpacked) {
-                return this.loadStateBuffer(unpacked);
-            }
-        }
         const success = mgba_load_state(this.handle, filepath);
         if (success) {
             this.updateSampleRate();
@@ -771,9 +763,7 @@ export class NativeMgbaCore {
 
     public loadStateBuffer(stateBuffer: Buffer | Uint8Array): boolean {
         this.ensureOpen();
-        const unpacked = unpackMgbaPngBuffer(stateBuffer);
-        const targetBuffer = unpacked ?? stateBuffer;
-        const success = mgba_load_state_buffer(this.handle, targetBuffer, targetBuffer.length);
+        const success = mgba_load_state_buffer(this.handle, stateBuffer, stateBuffer.length);
         if (success) {
             this.updateSampleRate();
         }
