@@ -53,7 +53,11 @@ export class FfmpegRecordingSink implements MediaSink {
 
         this.name = parseSinkIdentity(options.name ?? 'ffmpeg-recording-sink');
         this.outputPath = path.resolve(options.outputPath);
-        this.ffmpegPath = options.ffmpegPath ?? '/usr/bin/ffmpeg';
+        this.ffmpegPath = options.ffmpegPath
+            ?? process.env['FFMPEG_PATH']
+            ?? (process.platform === 'win32'
+                ? 'ffmpeg'
+                : (fs.existsSync('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg'));
         this.width = options.width ?? 160;
         this.height = options.height ?? 144;
         this.framerate = options.framerate ?? '262144/4389';

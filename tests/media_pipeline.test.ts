@@ -29,6 +29,27 @@ interface FfprobeOutput {
     };
 }
 
+function resolveFfmpegBin(): string {
+    if (process.env['FFMPEG_PATH']) return process.env['FFMPEG_PATH'];
+    if (process.platform === 'win32') return 'ffmpeg';
+    return fs.existsSync('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
+}
+
+function resolveFfprobeBin(): string {
+    if (process.env['FFPROBE_PATH']) return process.env['FFPROBE_PATH'];
+    if (process.platform === 'win32') return 'ffprobe';
+    return fs.existsSync('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
+}
+
+async function isBinaryAvailable(bin: string): Promise<boolean> {
+    try {
+        await execFileAsync(bin, ['-version']);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 test('Media Pipeline & Continuous A/V Recording (Slice 4)', async (t) => {
     if (!hasTestRom()) {
         t.skip('Test ROM fixture not found (set ROM_PATH to run)');
@@ -48,12 +69,8 @@ test('Media Pipeline & Continuous A/V Recording (Slice 4)', async (t) => {
     }
 
     t.after(() => {
-        if (tempDir) {
-            try {
-                fs.rmSync(tempDir, { recursive: true, force: true });
-            } catch {
-                // ignore
-            }
+        if (tempDir && fs.existsSync(tempDir)) {
+            fs.rmSync(tempDir, { recursive: true, force: true });
         }
     });
 
@@ -138,6 +155,14 @@ test('Media Pipeline & Continuous A/V Recording (Slice 4)', async (t) => {
             st.skip('Skipping MP4 file recording test in read-only environment');
             return;
         }
+
+        const ffmpegBin = resolveFfmpegBin();
+        const ffprobeBin = resolveFfprobeBin();
+        if (!(await isBinaryAvailable(ffmpegBin)) || !(await isBinaryAvailable(ffprobeBin))) {
+            st.skip('Skipping: ffmpeg or ffprobe binary not available in environment');
+            return;
+        }
+
         const mp4Path = path.join(tempDir, 'test_slice4_recording.mp4');
         if (fs.existsSync(mp4Path)) {
             fs.unlinkSync(mp4Path);
@@ -159,6 +184,7 @@ test('Media Pipeline & Continuous A/V Recording (Slice 4)', async (t) => {
                 sampleRate,
                 overwrite: true,
                 outputAudioSampleRate: 48000,
+                ffmpegPath: ffmpegBin,
             });
 
             emulator.useMediaSink(recordingSink);
@@ -174,7 +200,7 @@ test('Media Pipeline & Continuous A/V Recording (Slice 4)', async (t) => {
             assert.ok(stats.size > 10000, `MP4 file too small: ${stats.size} bytes`);
 
             // Probe with ffprobe to verify valid container streams
-            const { stdout } = await execFileAsync('/usr/bin/ffprobe', [
+            const { stdout } = await execFileAsync(ffprobeBin, [
                 '-v', 'error',
                 '-show_entries', 'stream=codec_type,codec_name,width,height,r_frame_rate,sample_rate,channels',
                 '-show_entries', 'format=duration',

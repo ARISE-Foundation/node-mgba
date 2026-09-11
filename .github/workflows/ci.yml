@@ -43,6 +43,10 @@ jobs:
         if: runner.os == 'Linux'
         run: pnpm run build
 
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg --no-progress
+
       - name: Build TypeScript & GUI (Windows)
         if: runner.os == 'Windows'
         run: |
