@@ -201,3 +201,6 @@ export {
     type MapObject,
     POKEMON_BLUE_SHA256,
 } from './plugins/pokemonRedBlue.js';
+export {
+    unpackMgbaPngBuffer,
+} from './utils/savestate.js';

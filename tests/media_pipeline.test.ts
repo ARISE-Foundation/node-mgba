@@ -151,6 +151,11 @@ test('Media Pipeline & Continuous A/V Recording (Slice 4)', async (t) => {
     });
 
     await t.test('3. Should record a valid H.264/AAC MP4 video with synchronized audio via FfmpegRecordingSink', async (st) => {
+        if (process.platform === 'win32') {
+            st.skip('FFmpeg multi-pipe (pipe:3, pipe:4) live input is supported only on POSIX systems (Linux/macOS)');
+            return;
+        }
+
         if (!tempDir) {
             st.skip('Skipping MP4 file recording test in read-only environment');
             return;

@@ -51,13 +51,17 @@ export class FfmpegRecordingSink implements MediaSink {
             throw new Error('FfmpegRecordingSink requires a valid outputPath string');
         }
 
+        if (process.platform === 'win32') {
+            throw new Error(
+                'FfmpegRecordingSink: Multi-stream pipe recording (pipe:3/pipe:4) is supported only on POSIX systems (Linux/macOS).',
+            );
+        }
+
         this.name = parseSinkIdentity(options.name ?? 'ffmpeg-recording-sink');
         this.outputPath = path.resolve(options.outputPath);
         this.ffmpegPath = options.ffmpegPath
             ?? process.env['FFMPEG_PATH']
-            ?? (process.platform === 'win32'
-                ? 'ffmpeg'
-                : (fs.existsSync('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg'));
+            ?? (fs.existsSync('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg');
         this.width = options.width ?? 160;
         this.height = options.height ?? 144;
         this.framerate = options.framerate ?? '262144/4389';
