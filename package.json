@@ -1,6 +1,6 @@
 {
   "name": "node-mgba",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "packageManager": "pnpm@10.19.0",
   "description": "Scriptable, headless Game Boy and GBA emulator for Node.js powered by libmgba",
   "type": "module",
