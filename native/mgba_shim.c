@@ -1,6 +1,10 @@
 #define ENABLE_VFS 1
 #define ENABLE_DIRECTORIES 1
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
 #include "mgba_shim.h"
 #include <mgba/core/core.h>
 #include <mgba/core/config.h>
@@ -737,11 +741,19 @@ bool mgba_save_state(mgba_handle_t* handle, const char* filepath) {
     vf->close(vf);
 
     if (success) {
+#if defined(_WIN32)
+        if (!MoveFileExA(temp_path, filepath, MOVEFILE_REPLACE_EXISTING)) {
+            unlink(temp_path);
+            return false;
+        }
+        return true;
+#else
         if (rename(temp_path, filepath) != 0) {
             unlink(temp_path);
             return false;
         }
         return true;
+#endif
     }
 
     unlink(temp_path);

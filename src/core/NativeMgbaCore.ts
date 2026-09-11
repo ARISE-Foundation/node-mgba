@@ -706,6 +706,33 @@ export class NativeMgbaCore {
 
     public saveState(filepath: string): boolean {
         this.ensureOpen();
+        if (process.platform === 'win32') {
+            const tempPath = `${filepath}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
+            try {
+                const ok = mgba_save_state(this.handle, tempPath);
+                if (!ok || !fs.existsSync(tempPath)) {
+                    if (fs.existsSync(tempPath)) {
+                        try {
+                            fs.unlinkSync(tempPath);
+                        } catch {
+                            // ignore cleanup error
+                        }
+                    }
+                    return false;
+                }
+                fs.renameSync(tempPath, filepath);
+                return true;
+            } catch {
+                if (fs.existsSync(tempPath)) {
+                    try {
+                        fs.unlinkSync(tempPath);
+                    } catch {
+                        // ignore cleanup error
+                    }
+                }
+                return false;
+            }
+        }
         return mgba_save_state(this.handle, filepath);
     }
 

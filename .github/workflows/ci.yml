@@ -8,14 +8,19 @@ on:
 
 jobs:
   build-and-test:
-    name: Build, Lint & Test (Linux x64)
-    runs-on: ubuntu-latest
+    name: Build, Lint & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install build tools
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc make ffmpeg
@@ -34,8 +39,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build native shim & TypeScript
+      - name: Build native shim & TypeScript (Linux)
+        if: runner.os == 'Linux'
         run: pnpm run build
+
+      - name: Build TypeScript & GUI (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          pnpm run build:ts
+          pnpm run build:gui
 
       - name: Type check
         run: pnpm run type-check
@@ -43,10 +55,18 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
-      - name: Run test suite
+      - name: Run test suite (Linux)
+        if: runner.os == 'Linux'
         run: pnpm run test
+        env:
+          ROM_PATH: ${{ secrets.ROM_PATH }}
+
+      - name: Run test suite (Windows)
+        if: runner.os == 'Windows'
+        run: node --import tsx/esm --test tests/*.test.ts
         env:
           ROM_PATH: ${{ secrets.ROM_PATH }}
 
       - name: Verify package tarball
         run: npm pack --dry-run
+
