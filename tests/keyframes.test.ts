@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import sharp from 'sharp';
 import { EmulatorController, encodeKeyframe, MgbaEmulator, press, wait } from '../src/index.js';
 import { getTestRomPath, hasTestRom } from './helpers/rom.js';
 
@@ -121,6 +122,11 @@ test('Keyframe Pipeline & Action Anchor Invariants', async (t) => {
             Array.from(png.subarray(0, 8)),
             [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
         );
+
+        const scaledPng = await encodeKeyframe(kf, { scale: 2 });
+        const meta = await sharp(scaledPng).metadata();
+        assert.equal(meta.width, kf.width * 2);
+        assert.equal(meta.height, kf.height * 2);
     });
 
     await t.test('5. EmulatorController executeSequence and pressButtons forward turnResult and keyframes', async () => {

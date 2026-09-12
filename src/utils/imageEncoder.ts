@@ -8,6 +8,7 @@ export interface ImageEncodeOptions {
     readonly lossless?: boolean;
     readonly quality?: number;
     readonly effort?: number;
+    readonly scale?: number;
 }
 
 export async function encodeKeyframe(
@@ -48,13 +49,21 @@ export async function encodeVideoPacket(
         rawBuffer = contiguous;
     }
 
-    const pipeline = sharp(rawBuffer, {
+    let pipeline = sharp(rawBuffer, {
         raw: {
             width,
             height,
             channels: 4,
         },
     });
+
+    if (options.scale && options.scale > 1) {
+        pipeline = pipeline.resize({
+            width: Math.round(width * options.scale),
+            height: Math.round(height * options.scale),
+            kernel: 'nearest',
+        });
+    }
 
     switch (format) {
         case 'webp':

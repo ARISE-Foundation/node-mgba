@@ -72,8 +72,10 @@ export interface MgbaConsoleApi {
 }
 
 export interface MgbaScreenApi {
+    readonly width: number;
+    readonly height: number;
     readonly frame: () => Promise<VideoPacket>;
-    readonly toPng: () => Promise<Buffer>;
+    readonly toPng: (options?: { scale?: number }) => Promise<Buffer>;
     readonly toWebp: (options?: { quality?: number }) => Promise<Buffer>;
     readonly crop: (box: { x: number; y: number; width: number; height: number; scale?: number }, format?: 'png' | 'raw') => Promise<Buffer>;
     readonly sprites: (options?: { is8x16GbMode?: boolean }) => Promise<readonly Sprite[]>;
@@ -209,7 +211,10 @@ export class MgbaInstance extends EventEmitter {
      * Ergonomic screen and graphics decoders.
      */
     public get screen(): MgbaScreenApi {
+        const isGba = this.romInfo.platform === 'GBA';
         return {
+            width: isGba ? 240 : 160,
+            height: isGba ? 160 : 144,
             frame: async (): Promise<VideoPacket> => {
                 const obs = await this.client.observe({ screen: true });
                 if (!obs.screen) {
@@ -227,18 +232,26 @@ export class MgbaInstance extends EventEmitter {
                 };
             },
 
-            toPng: async (): Promise<Buffer> => {
+            toPng: async (options?: { scale?: number }): Promise<Buffer> => {
                 const obs = await this.client.observe({ screen: true });
                 if (!obs.screen) {
                     throw new Error('Screen buffer not available in observation');
                 }
                 const { width, height, buffer } = obs.screen;
 
-                return sharp(buffer, {
+                let pipeline = sharp(buffer, {
                     raw: { width, height, channels: 4 },
-                })
-                    .png()
-                    .toBuffer();
+                });
+
+                if (options?.scale && options.scale > 1) {
+                    pipeline = pipeline.resize({
+                        width: Math.round(width * options.scale),
+                        height: Math.round(height * options.scale),
+                        kernel: 'nearest',
+                    });
+                }
+
+                return pipeline.png().toBuffer();
             },
 
             crop: async (box: { x: number; y: number; width: number; height: number; scale?: number }, format: 'png' | 'raw' = 'png'): Promise<Buffer> => {

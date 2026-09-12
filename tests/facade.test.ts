@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import sharp from 'sharp';
 import { Mgba, MgbaInstance, SnapshotMemoryReader, GamePlugin, type MemoryReader } from '../src/index.js';
 import { getTestRomPath, hasTestRom } from './helpers/rom.js';
 
@@ -39,6 +40,11 @@ test('Mgba Public Modernized Facade Suite', async (t) => {
             assert.equal(pngBuffer[1], 0x50);
             assert.equal(pngBuffer[2], 0x4E);
             assert.equal(pngBuffer[3], 0x47);
+
+            const scaledPng = await emu.screen.toPng({ scale: 2 });
+            const meta = await sharp(scaledPng).metadata();
+            assert.equal(meta.width, emu.console.width * 2);
+            assert.equal(meta.height, emu.console.height * 2);
 
             const vram = await emu.screen.vram();
             assert.ok(Buffer.isBuffer(vram));
