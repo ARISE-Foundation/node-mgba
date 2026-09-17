@@ -6,6 +6,7 @@ import { GamePlugin } from './GamePlugin.js';
 import {
     decodePokemonRedBlueState,
     type PokemonRedBlueState,
+    type GameSceneState,
     type PokemonPartyMember,
     type PokemonStoredMember,
     type EnemyPokemon,
@@ -22,6 +23,7 @@ import {
 
 export {
     type PokemonRedBlueState,
+    type GameSceneState,
     type PokemonPartyMember,
     type PokemonStoredMember,
     type EnemyPokemon,
@@ -43,6 +45,7 @@ export class PokemonRedBluePlugin extends GamePlugin<PokemonRedBlueState> {
     public static override readonly memorySlices: MemorySnapshotOptions = { vram: true };
 
     private readonly spriteMovementCache = new Map<number, number>();
+    private hasEnteredOverworld = false;
 
     constructor(emu: MgbaInstance) {
         super(emu);
@@ -58,6 +61,22 @@ export class PokemonRedBluePlugin extends GamePlugin<PokemonRedBlueState> {
      */
     public static decode(mem: MemoryReader): PokemonRedBlueState {
         return decodePokemonRedBlueState(mem);
+    }
+
+    /**
+     * Snapshots the memory slices required by this game plugin and decodes the live game state.
+     */
+    public override async getState(): Promise<PokemonRedBlueState> {
+        const snapshot = await this.emu.memory.snapshot(PokemonRedBluePlugin.memorySlices);
+        const state = decodePokemonRedBlueState(snapshot, {
+            hasEnteredOverworld: this.hasEnteredOverworld,
+        });
+
+        if (state.systemState === 'OVERWORLD' || state.battle.inBattle) {
+            this.hasEnteredOverworld = true;
+        }
+
+        return state;
     }
 
     #assertSpriteId(objectId: number): void {
@@ -115,5 +134,6 @@ export class PokemonRedBluePlugin extends GamePlugin<PokemonRedBlueState> {
      */
     public dispose(): void {
         this.spriteMovementCache.clear();
+        this.hasEnteredOverworld = false;
     }
 }

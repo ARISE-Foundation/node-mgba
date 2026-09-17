@@ -144,7 +144,14 @@ export interface OverworldMapData {
     readonly tiles: Record<string, Record<string, string>>;
 }
 
+export interface GameSceneState {
+    readonly titleScreen: boolean;
+    readonly oakIntro: boolean;
+    readonly preOverworld: boolean;
+}
+
 export interface PokemonRedBlueState {
+    readonly scene: GameSceneState;
     readonly player: {
         readonly position: { readonly x: number; readonly y: number };
         readonly facing: 'down' | 'up' | 'left' | 'right';
@@ -843,13 +850,13 @@ function decodeNamingScreenSelection(mem: MemoryReader): string | false {
         return false;
     }
 
-    const cursorAddr = mem.readU16LE(0xC034);
-    if (cursorAddr < 0xC3A0 || cursorAddr > 0xC508) {
-        return false;
+    const cursorAddr = mem.readU16LE(0xCC30);
+    if (cursorAddr === 0xC3C9 || cursorAddr < 0xC3A0 || cursorAddr > 0xC508) {
+        return firstLetter === 0x80 ? 'A' : 'a';
     }
 
     const letterTile = mem.readU8(cursorAddr + 1);
-    if (letterTile >= 0x70 && letterTile <= 0x73) {
+    if (letterTile >= 0x70 && letterTile <= 0x75) {
         return 'ED';
     }
 
@@ -1085,7 +1092,10 @@ function decodeTerrainGrid(mem: MemoryReader, playerX: number, playerY: number, 
     };
 }
 
-export function decodePokemonRedBlueState(mem: MemoryReader): PokemonRedBlueState {
+export function decodePokemonRedBlueState(
+    mem: MemoryReader,
+    options?: { hasEnteredOverworld?: boolean }
+): PokemonRedBlueState {
     const mapId = mem.readU8(0xD35E);
     const playerY = mem.readU8(0xD361);
     const playerX = mem.readU8(0xD362);
@@ -1095,8 +1105,8 @@ export function decodePokemonRedBlueState(mem: MemoryReader): PokemonRedBlueStat
     const facingByte = mem.readU8(0xC109);
     const facing = decodeFacing(facingByte);
 
-    const badges = mem.readU8(0xD356);
-    const badgeCount = countSetBits(badges);
+    let badges = mem.readU8(0xD356);
+    let badgeCount = countSetBits(badges);
 
     let money: number;
     try {
@@ -1146,7 +1156,39 @@ export function decodePokemonRedBlueState(mem: MemoryReader): PokemonRedBlueStat
     const terrain = decodeTerrainGrid(mem, playerX, playerY, mapWidth, mapHeight);
     const namingScreenSelection = decodeNamingScreenSelection(mem);
 
+    // --- Scene Detection ---
+    const hasActiveGameState = !playerName.startsWith('?') && (mapId !== 0 || money > 0 || party.length > 0 || inventory.length > 0 || badges > 0);
+    const isInGame = Boolean(
+        options?.hasEnteredOverworld
+        || systemState === 'OVERWORLD'
+        || inBattle
+        || (options?.hasEnteredOverworld === undefined && hasActiveGameState)
+    );
+
+    let titleScreen = false;
+    let oakIntro = false;
+    let preOverworld = false;
+
+    if (!isInGame) {
+        preOverworld = true;
+        const isOakDialogue = screenText.trim() !== '' && mem.readU8(0xC0EF) !== 0x1F;
+        if (namingScreenSelection !== false || isOakDialogue) {
+            oakIntro = true;
+        } else {
+            titleScreen = true;
+        }
+
+        // Sanitize uninitialized boot WRAM bits (0xFF) for badges
+        badges = 0;
+        badgeCount = 0;
+    }
+
     return {
+        scene: {
+            titleScreen,
+            oakIntro,
+            preOverworld,
+        },
         player: {
             position: { x: playerX, y: playerY },
             facing,
@@ -1176,19 +1218,19 @@ export function decodePokemonRedBlueState(mem: MemoryReader): PokemonRedBlueStat
             battleType,
             enemyPokemon,
         },
-        enemyPokemon,
-        party,
-        partyCount: party.length,
-        inventory,
-        storedItems,
+        enemyPokemon: preOverworld ? null : enemyPokemon,
+        party: preOverworld ? [] : party,
+        partyCount: preOverworld ? 0 : party.length,
+        inventory: preOverworld ? [] : inventory,
+        storedItems: preOverworld ? [] : storedItems,
         currentBoxNumber,
-        storedPokemon,
+        storedPokemon: preOverworld ? [] : storedPokemon,
         pokedexProgress: {
-            seen: pokedex.seenCount,
-            caught: pokedex.ownedCount,
+            seen: preOverworld ? 0 : pokedex.seenCount,
+            caught: preOverworld ? 0 : pokedex.ownedCount,
             total: 151,
         },
-        pokedexCaught: pokedex.caughtNames,
+        pokedexCaught: preOverworld ? [] : pokedex.caughtNames,
         screenText,
         rawText,
         isJoypadIgnored,

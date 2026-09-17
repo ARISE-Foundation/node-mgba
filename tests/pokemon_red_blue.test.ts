@@ -24,22 +24,28 @@ test('PokemonRedBluePlugin RAM Decoder Integration', async (t) => {
         await t.test('1. Should return structured game state schema on boot', async () => {
             const state = await redBlue.getState();
 
+            assert.equal(typeof state.scene, 'object');
+            assert.equal(state.scene.preOverworld, true);
+            assert.equal(state.scene.titleScreen, true);
+            assert.equal(state.scene.oakIntro, false);
+
             assert.equal(typeof state.player.position.x, 'number');
             assert.equal(typeof state.player.position.y, 'number');
             assert.ok(['down', 'up', 'left', 'right'].includes(state.player.facing));
-            assert.equal(typeof state.player.badges, 'number');
-            assert.equal(typeof state.player.badgeCount, 'number');
+            assert.equal(state.player.badges, 0);
+            assert.equal(state.player.badgeCount, 0);
             assert.equal(typeof state.partyCount, 'number');
             assert.ok(Array.isArray(state.party));
             assert.equal(typeof state.battle.inBattle, 'boolean');
             assert.ok(['wild', 'trainer', 'none'].includes(state.battle.battleType));
-            assert.equal(typeof state.pokedexProgress.seen, 'number');
-            assert.equal(typeof state.pokedexProgress.caught, 'number');
-            assert.equal(typeof state.pokedexProgress.total, 'number');
-            assert.ok(Array.isArray(state.pokedexCaught));
-            assert.ok(Array.isArray(state.inventory));
-            assert.ok(Array.isArray(state.storedItems));
-            assert.ok(Array.isArray(state.storedPokemon));
+            assert.equal(state.pokedexProgress.seen, 0);
+            assert.equal(state.pokedexProgress.caught, 0);
+            assert.equal(state.pokedexProgress.total, 151);
+            assert.deepEqual(state.pokedexCaught, []);
+            assert.deepEqual(state.party, []);
+            assert.deepEqual(state.inventory, []);
+            assert.deepEqual(state.storedItems, []);
+            assert.deepEqual(state.storedPokemon, []);
             assert.equal(typeof state.screenText, 'string');
             assert.equal(typeof state.rawText, 'string');
             assert.equal(typeof state.systemState, 'string');
@@ -228,6 +234,63 @@ test('PokemonRedBluePlugin RAM Decoder Integration', async (t) => {
                 const decoded = decodeScreenText(transitionObs.memory);
                 assert.equal(decoded.screenText, '');
                 assert.equal(decoded.isPossiblyMenuOpen, false);
+            }
+        });
+
+        await t.test('7. Should decode scene progression and preserve zero badges during intro', async () => {
+            const introEmu = await Mgba.load(testRom.path);
+            try {
+                const introPlugin = await introEmu.use(PokemonRedBluePlugin);
+                // Step to title screen
+                await introEmu.controls.wait(200);
+                const titleState = await introPlugin.getState();
+                assert.equal(titleState.scene.titleScreen, true);
+                assert.equal(titleState.scene.preOverworld, true);
+                assert.equal(titleState.scene.oakIntro, false);
+                assert.equal(titleState.player.badgeCount, 0);
+                assert.equal(titleState.player.badges, 0);
+                assert.equal(titleState.pokedexProgress.seen, 0);
+                assert.equal(titleState.pokedexProgress.caught, 0);
+                assert.deepEqual(titleState.pokedexCaught, []);
+
+                // Press START to reach main menu
+                await introEmu.controls.sequence([
+                    { type: 'press', button: 'START', holdFrames: 8 },
+                    { type: 'wait', frames: 60 },
+                ]);
+                const menuState = await introPlugin.getState();
+                assert.equal(menuState.scene.titleScreen, true);
+                assert.equal(menuState.scene.oakIntro, false);
+                assert.equal(menuState.scene.preOverworld, true);
+
+                // Press A on NEW GAME to enter Oak speech
+                await introEmu.controls.sequence([
+                    { type: 'press', button: 'A', holdFrames: 8 },
+                    { type: 'wait', frames: 120 },
+                ]);
+
+                // Advance dialogue until Oak intro text renders
+                for (let i = 0; i < 15; i++) {
+                    await introEmu.controls.sequence([
+                        { type: 'press', button: 'A', holdFrames: 6 },
+                        { type: 'wait', frames: 30 },
+                    ]);
+                    const s = await introPlugin.getState();
+                    if (s.scene.oakIntro) {
+                        break;
+                    }
+                }
+
+                const oakState = await introPlugin.getState();
+                assert.equal(oakState.scene.preOverworld, true);
+                assert.equal(oakState.scene.oakIntro, true);
+                assert.equal(oakState.player.badgeCount, 0);
+                assert.equal(oakState.player.badges, 0);
+                assert.equal(oakState.pokedexProgress.seen, 0);
+                assert.equal(oakState.pokedexProgress.caught, 0);
+                assert.deepEqual(oakState.pokedexCaught, []);
+            } finally {
+                await introEmu.close();
             }
         });
     } finally {

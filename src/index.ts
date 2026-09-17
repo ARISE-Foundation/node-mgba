@@ -197,6 +197,7 @@ export {
     PokemonRedBluePlugin,
     isPokemonRedBlue,
     type PokemonRedBlueState,
+    type GameSceneState,
     type PokemonPartyMember,
     type MapObject,
     POKEMON_BLUE_SHA256,
