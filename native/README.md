@@ -4,7 +4,7 @@ This directory contains the C shim layer bridging Node.js (`koffi`) to `libmgba`
 
 ## Binaries
 
-- `libmgba_shim.so`: Linux x86_64 shared library dynamically linked to `vendor/mgba-dist/lib/libmgba.so.0.11.0`.
+- `libmgba_shim.so`: Linux x86_64 shared library dynamically linked to `vendor/mgba-dist/lib/libmgba.so.0.11`.
 - `mgba_shim.dll`: Windows x64 shared library statically bundling `libmgba`, `libpng` (1.6.51), and `zlib` (1.2.11). It links exclusively against standard Windows system libraries (`KERNEL32`, `msvcrt`, `ole32`, `SHELL32`, `SHLWAPI`, `WS2_32`) and has zero third-party runtime dependencies.
 
 ---
