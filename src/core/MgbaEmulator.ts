@@ -34,6 +34,7 @@ export class MgbaEmulator {
     public readonly registry: PluginRegistry;
     private isInitialized = false;
     private currentKeyMask = 0;
+    private persistentKeyMask = 0;
     private continuousHeldFrames = new Map<ButtonName, number>();
     private activeToken: object | null = null;
     private cancelledTokens = new Set<object>();
@@ -98,6 +99,7 @@ export class MgbaEmulator {
         await this.registry.bindROM(romInfo, this.core);
         this.isInitialized = true;
         this.currentKeyMask = 0;
+        this.persistentKeyMask = 0;
         return romInfo;
     }
 
@@ -224,12 +226,15 @@ export class MgbaEmulator {
                 await this.registry.notifyKeyframe(preAnchor);
             }
 
-            let persistentMask = this.currentKeyMask;
+            let persistentMask = this.persistentKeyMask;
+            let lastActionWasPressWithZeroRelease = false;
+            let lastPressMask = 0;
 
             // 2. Execute input actions
             for (const [i, action] of validatedActions.entries()) {
                 if (this.cancelledTokens.has(token) || options.signal?.aborted) {
                     this.currentKeyMask = 0;
+                    this.persistentKeyMask = 0;
                     const reason = options.signal?.reason;
                     const abortErr = reason instanceof AbortError
                         ? reason
@@ -248,15 +253,26 @@ export class MgbaEmulator {
                         }
                         if (release > 0) {
                             await this.step(release, persistentMask, { signal: options.signal });
+                            lastActionWasPressWithZeroRelease = false;
+                            lastPressMask = 0;
+                        } else if (hold > 0) {
+                            this.currentKeyMask = persistentMask | mask;
+                            lastActionWasPressWithZeroRelease = true;
+                            lastPressMask = mask;
                         } else {
                             this.currentKeyMask = persistentMask;
+                            lastActionWasPressWithZeroRelease = false;
+                            lastPressMask = 0;
                         }
                         break;
                     }
                     case 'hold': {
                         const mask = resolveButtonMask(action.button);
                         persistentMask |= mask;
+                        this.persistentKeyMask = persistentMask;
                         this.currentKeyMask = persistentMask;
+                        lastActionWasPressWithZeroRelease = false;
+                        lastPressMask = 0;
                         if (action.frames && action.frames > 0) {
                             await this.step(action.frames, persistentMask, { signal: options.signal });
                         }
@@ -269,10 +285,15 @@ export class MgbaEmulator {
                         } else {
                             persistentMask = 0;
                         }
+                        this.persistentKeyMask = persistentMask;
                         this.currentKeyMask = persistentMask;
+                        lastActionWasPressWithZeroRelease = false;
+                        lastPressMask = 0;
                         break;
                     }
                     case 'wait': {
+                        lastActionWasPressWithZeroRelease = false;
+                        lastPressMask = 0;
                         if (action.frames > 0) {
                             await this.step(action.frames, persistentMask, { signal: options.signal });
                         }
@@ -290,11 +311,15 @@ export class MgbaEmulator {
                 }
             }
 
+            const finalMask = lastActionWasPressWithZeroRelease
+                ? (persistentMask | lastPressMask)
+                : persistentMask;
+
             // 3. Post-action stabilization frames
             if (postStabilization > 0) {
-                await this.step(postStabilization, persistentMask, { signal: options.signal });
+                await this.step(postStabilization, finalMask, { signal: options.signal });
             }
-            this.currentKeyMask = persistentMask;
+            this.currentKeyMask = finalMask;
 
             // 4. Post-action anchor frame
             const postAnchor = this.collector.sampleFrame(this.core, { triggerReason: 'post_action', force: true });
@@ -337,6 +362,7 @@ export class MgbaEmulator {
     public reset(): void {
         this.core.reset();
         this.currentKeyMask = 0;
+        this.persistentKeyMask = 0;
     }
 
     /**
@@ -364,6 +390,7 @@ export class MgbaEmulator {
      * Sets the active persistent key mask.
      */
     public setKeyMask(mask: number): void {
+        this.persistentKeyMask = mask;
         this.currentKeyMask = mask;
         for (const [name, bit] of Object.entries(BUTTON_BITMASKS) as [ButtonName, number][]) {
             if ((this.currentKeyMask & bit) === 0) {
@@ -384,6 +411,7 @@ export class MgbaEmulator {
             mask |= bit;
             this.continuousHeldFrames.set(norm, Math.max(0, status.framesHeld));
         }
+        this.persistentKeyMask = mask;
         this.currentKeyMask = mask;
     }
 
@@ -406,6 +434,7 @@ export class MgbaEmulator {
      */
     public clearActionQueue(): void {
         this.currentKeyMask = 0;
+        this.persistentKeyMask = 0;
         this.continuousHeldFrames.clear();
         if (this.activeToken) {
             this.cancelledTokens.add(this.activeToken);

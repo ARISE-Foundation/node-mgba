@@ -523,4 +523,55 @@ test('Contracts & Error Boundaries', async (t) => {
 
         await emulator.close();
     });
+
+    await t.test('33. stepSequence with releaseFrames: 0 preserves buttons in currentKeyMask and continuous count across sequences', async () => {
+        const emulator = new MgbaEmulator();
+        const keysPerFrame: number[] = [];
+        emulator.registerPlugin({
+            name: 'key-tracker-hold',
+            onFrame: (data) => {
+                keysPerFrame.push(data.currentKeys);
+            },
+        });
+        await emulator.loadROM(romPath);
+
+        // Sequence 1: Press Right+B for 2 frames (release 0), then Right+B+A for 3 frames (release 0)
+        await emulator.stepSequence([
+            { type: 'press', button: 'RIGHT+B', holdFrames: 2, releaseFrames: 0 },
+            { type: 'press', button: 'RIGHT+B+A', holdFrames: 3, releaseFrames: 0 },
+        ], { postStabilizationFrames: 0 });
+
+        const rightB = BUTTON_BITMASKS.RIGHT | BUTTON_BITMASKS.B;
+        const rightBA = BUTTON_BITMASKS.RIGHT | BUTTON_BITMASKS.B | BUTTON_BITMASKS.A;
+
+        assert.deepEqual(keysPerFrame, [
+            rightB, rightB,
+            rightBA, rightBA, rightBA,
+        ]);
+
+        // Key mask and held buttons should reflect Right+B+A held at the end
+        assert.equal(emulator.getKeyMask(), rightBA);
+        const held1 = emulator.getHeldButtons();
+        assert.equal(held1.length, 3);
+        assert.equal(held1.find((h) => h.button === 'A')?.framesHeld, 3);
+        assert.equal(held1.find((h) => h.button === 'B')?.framesHeld, 5);
+        assert.equal(held1.find((h) => h.button === 'RIGHT')?.framesHeld, 5);
+
+        // Sequence 2: Next turn, release A, continue holding Right+B for 2 frames with release 2
+        keysPerFrame.length = 0;
+        await emulator.stepSequence([
+            { type: 'press', button: 'RIGHT+B', holdFrames: 2, releaseFrames: 2 },
+        ], { postStabilizationFrames: 0 });
+
+        // Expected: A released immediately at frame 0 of seq 2, Right+B held for 2 frames, then release 2 frames
+        assert.deepEqual(keysPerFrame, [
+            rightB, rightB,
+            0, 0,
+        ]);
+
+        assert.equal(emulator.getKeyMask(), 0);
+        assert.deepEqual(emulator.getHeldButtons(), []);
+
+        await emulator.close();
+    });
 });
