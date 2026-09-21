@@ -360,5 +360,25 @@ test('WebAudioPlayer Suite', async (t) => {
             assert.equal(node.playbackRate.value, 1.0, 'Playback rate in buffered mode must remain exactly 1.0');
         }
     });
+
+    await t.test('10. leadSeconds getter reports accurate lead and resets to 0 after handleStreamReset()', () => {
+        const player = new WebAudioPlayer({ mode: 'buffered', defaultVolume: 1.0 });
+        assert.equal(player.leadSeconds, 0);
+
+        const packet: BrowserAudioPacket = {
+            type: 'audio',
+            frameIndex: 1,
+            pts: 0.016,
+            sampleRate: 48000,
+            channels: 2,
+            sampleFrames: 4800, // 100ms chunk
+            buffer: new Uint8Array(4800 * 4),
+        };
+
+        player.playChunk(packet);
+        assert.ok(player.leadSeconds > 0, 'leadSeconds must be greater than 0 after scheduling');
+        player.handleStreamReset();
+        assert.equal(player.leadSeconds, 0, 'leadSeconds must reset to 0 after handleStreamReset()');
+    });
 });
 

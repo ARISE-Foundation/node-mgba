@@ -42,6 +42,11 @@ export class WebAudioPlayer {
         return this.currentVolume;
     }
 
+    public get leadSeconds(): number {
+        if (!this.audioCtx || this.nextPlayTime === 0) return 0;
+        return Math.max(0, this.nextPlayTime - this.audioCtx.currentTime);
+    }
+
     public setVolume(newVolume: number): void {
         this.currentVolume = Math.max(0, Math.min(1, newVolume));
         if (this.masterGain && this.audioCtx) {
