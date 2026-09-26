@@ -30,6 +30,21 @@ typedef struct mgba_batch_request {
     uint8_t _reserved[3]; // padding for 4-byte alignment
 } mgba_batch_request_t;
 
+typedef struct mgba_cpu_state {
+    int32_t pc;
+    int32_t sp;
+    int32_t a;
+    int32_t b;
+    int32_t c;
+    int32_t d;
+    int32_t e;
+    int32_t f;
+    int32_t h;
+    int32_t l;
+    bool halted;
+    bool ime;
+} mgba_cpu_state_t;
+
 /**
  * Open and initialize a ROM headlessly.
  * Allocates internal video buffer and resets core.
@@ -141,6 +156,35 @@ bool mgba_load_state(mgba_handle_t* handle, const char* filepath);
  */
 size_t mgba_save_state_buffer(mgba_handle_t* handle, uint8_t* out_buffer, size_t max_size);
 bool mgba_load_state_buffer(mgba_handle_t* handle, const uint8_t* in_buffer, size_t size);
+
+/**
+ * Clones active cartridge battery RAM and writes to a standalone .sav file atomically.
+ * Returns true on success, false on failure or if ROM has no savedata.
+ */
+bool mgba_save_battery_file(mgba_handle_t* handle, const char* filepath);
+
+/**
+ * Loads a standalone .sav file into active core battery RAM buffer.
+ * Returns true on success, false on failure.
+ */
+bool mgba_load_battery_file(mgba_handle_t* handle, const char* filepath);
+
+/**
+ * Copies active cartridge SRAM into out_buffer.
+ * Returns bytes copied, or 0 if buffer is too small or core has no battery RAM.
+ */
+size_t mgba_copy_sram(mgba_handle_t* handle, uint8_t* out_buffer, size_t max_size);
+
+/**
+ * Restores cartridge SRAM directly from in_buffer.
+ * Returns true on success, false on failure.
+ */
+bool mgba_write_sram(mgba_handle_t* handle, const uint8_t* in_buffer, size_t size);
+
+/**
+ * Retrieves current CPU register and execution status.
+ */
+bool mgba_get_cpu_state(mgba_handle_t* handle, mgba_cpu_state_t* state_out);
 
 /**
  * Dynamic APU audio sample rate in Hz (e.g. 131072 for GB, ~32768 for GBA).

@@ -179,3 +179,25 @@ export function getGbaSavestatePath(): string {
     if (resolved) return resolved;
     throw new Error(`No savestate found for ROM at "${activeRom}". Set SAVESTATE_PATH to run savestate tests.`);
 }
+
+/**
+ * Creates or retrieves a ROM configured with cartridge battery-backed SRAM.
+ */
+export function getBatteryRomPath(tempDir: string): string {
+    if (hasPokemonRom()) {
+        return getPokemonRomPath();
+    }
+    const baseRom = fs.readFileSync(getHomebrewGbRomPath());
+    const romBuf = Buffer.from(baseRom);
+    romBuf[0x0147] = 0x03; // MBC1 + RAM + BATTERY
+    romBuf[0x0149] = 0x02; // 8 KB SRAM
+    let chk = 0;
+    for (let i = 0x0134; i <= 0x014c; i++) {
+        chk = (chk - (romBuf[i] ?? 0) - 1) & 0xff;
+    }
+    romBuf[0x014d] = chk;
+
+    const outPath = path.join(tempDir, 'battery_test_rom.gb');
+    fs.writeFileSync(outPath, romBuf);
+    return outPath;
+}

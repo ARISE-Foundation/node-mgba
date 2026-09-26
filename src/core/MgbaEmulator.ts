@@ -1,4 +1,9 @@
-import { NativeMgbaCore } from './NativeMgbaCore.js';
+import { Buffer } from 'node:buffer';
+import {
+    NativeMgbaCore,
+    type CpuState,
+    type CpuHealthReport,
+} from './NativeMgbaCore.js';
 import { KeyframeCollector, type KeyframeCollectorOptions } from './KeyframeCollector.js';
 import { PluginRegistry } from './PluginRegistry.js';
 import type { EmulatorPlugin } from '../types/EmulatorPlugin.js';
@@ -21,6 +26,19 @@ import {
 } from '../types/InputAction.js';
 import { resolveButtonMask } from './InputActionCompiler.js';
 import { AbortError } from '../types/errors.js';
+
+export class EmulatorCrashError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'EmulatorCrashError';
+    }
+}
+
+export interface SaveStateOptions {
+    guardCrashes?: boolean;
+}
+
+export type { CpuState, CpuHealthReport };
 
 export interface MgbaEmulatorOptions {
     readonly collector?: KeyframeCollectorOptions;
@@ -368,7 +386,15 @@ export class MgbaEmulator {
     /**
      * Saves state to file atomically.
      */
-    public saveState(filepath: string): boolean {
+    public saveState(filepath: string, options?: SaveStateOptions): boolean {
+        if (options?.guardCrashes) {
+            const health = this.checkCpuHealth();
+            if (!health.ok) {
+                throw new EmulatorCrashError(
+                    `Refusing to save crashed emulator state: ${health.reason ?? 'Unknown CPU deadlock'} (PC: 0x${(health.pc >>> 0).toString(16).toUpperCase().padStart(4, '0')}, SP: 0x${(health.sp >>> 0).toString(16).toUpperCase().padStart(4, '0')})`,
+                );
+            }
+        }
         return this.core.saveState(filepath);
     }
 
@@ -377,6 +403,48 @@ export class MgbaEmulator {
      */
     public loadState(filepath: string): boolean {
         return this.core.loadState(filepath);
+    }
+
+    /**
+     * Clones active cartridge battery RAM and writes to a standalone .sav file atomically.
+     */
+    public saveBatteryFile(filepath: string): boolean {
+        return this.core.saveBatteryFile(filepath);
+    }
+
+    /**
+     * Loads a standalone .sav file into active core battery RAM buffer.
+     */
+    public loadBatteryFile(filepath: string): boolean {
+        return this.core.loadBatteryFile(filepath);
+    }
+
+    /**
+     * Copies active cartridge SRAM into a Buffer.
+     */
+    public getSram(): Buffer {
+        return this.core.getSram();
+    }
+
+    /**
+     * Restores cartridge SRAM directly from buffer.
+     */
+    public setSram(buffer: Buffer | Uint8Array): boolean {
+        return this.core.setSram(buffer);
+    }
+
+    /**
+     * Retrieves current CPU register and execution status.
+     */
+    public getCpuState(): CpuState {
+        return this.core.getCpuState();
+    }
+
+    /**
+     * Evaluates CPU execution state for crashes and deadlocks.
+     */
+    public checkCpuHealth(): CpuHealthReport {
+        return this.core.checkCpuHealth();
     }
 
     /**

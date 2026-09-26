@@ -81,6 +81,30 @@ describe('EmulatorController Lifecycle & DX Suite', { skip: !hasTestRom() }, () 
                 (err: unknown) => err instanceof LifecycleError && err.message.includes('loadState'),
             );
             await assert.rejects(
+                () => controller.saveBatteryFile('/tmp/test.sav'),
+                (err: unknown) => err instanceof LifecycleError && err.message.includes('saveBatteryFile'),
+            );
+            await assert.rejects(
+                () => controller.loadBatteryFile('/tmp/test.sav'),
+                (err: unknown) => err instanceof LifecycleError && err.message.includes('loadBatteryFile'),
+            );
+            await assert.rejects(
+                () => controller.getSram(),
+                (err: unknown) => err instanceof LifecycleError && err.message.includes('getSram'),
+            );
+            await assert.rejects(
+                () => controller.setSram(Buffer.alloc(10)),
+                (err: unknown) => err instanceof LifecycleError && err.message.includes('setSram'),
+            );
+            await assert.rejects(
+                () => controller.getCpuState(),
+                (err: unknown) => err instanceof LifecycleError && err.message.includes('getCpuState'),
+            );
+            await assert.rejects(
+                () => controller.checkCpuHealth(),
+                (err: unknown) => err instanceof LifecycleError && err.message.includes('checkCpuHealth'),
+            );
+            await assert.rejects(
                 () => controller.reset(),
                 (err: unknown) => err instanceof LifecycleError && err.message.includes('reset'),
             );
@@ -108,6 +132,10 @@ describe('EmulatorController Lifecycle & DX Suite', { skip: !hasTestRom() }, () 
             assert.throws(
                 () => { void controller.symbols; },
                 (err: unknown) => err instanceof LifecycleError && err.message.includes('symbols'),
+            );
+            assert.throws(
+                () => { void controller.diagnostics; },
+                (err: unknown) => err instanceof LifecycleError && err.message.includes('diagnostics'),
             );
         } finally {
             await controller.close();

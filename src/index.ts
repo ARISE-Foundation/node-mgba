@@ -5,6 +5,8 @@ export {
     type WaitForDeclarativeSpec,
     type WaitForOptions,
     type MemorySnapshotOptions,
+    type MgbaDiagnosticsApi,
+    type MgbaStatesApi,
 } from './Mgba.js';
 export {
     GamePlugin,
@@ -65,6 +67,8 @@ export {
     type MgbaEmulatorOptions,
     LeanEmulator,
     type LeanEmulatorOptions,
+    EmulatorCrashError,
+    type SaveStateOptions,
 } from './core/MgbaEmulator.js';
 export {
     NativeMgbaCore,
@@ -72,6 +76,8 @@ export {
     normalizeMemoryRegion,
     normalizeMemorySpace,
     parseRegionId,
+    type CpuState,
+    type CpuHealthReport,
 } from './core/NativeMgbaCore.js';
 export {
     BUTTON_BITMASKS,

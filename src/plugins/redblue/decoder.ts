@@ -1157,11 +1157,11 @@ export function decodePokemonRedBlueState(
     const namingScreenSelection = decodeNamingScreenSelection(mem);
 
     // --- Scene Detection ---
-    const hasActiveGameState = !playerName.startsWith('?') && (mapId !== 0 || money > 0 || party.length > 0 || inventory.length > 0 || badges > 0);
+    const hasActiveGameState = Boolean(playerName && !playerName.startsWith('?')) && (mapId !== 0 || money > 0 || party.length > 0 || inventory.length > 0 || badges > 0);
     const isInGame = Boolean(
         options?.hasEnteredOverworld
-        || systemState === 'OVERWORLD'
-        || inBattle
+        || (systemState === 'OVERWORLD' && Boolean(playerName && !playerName.startsWith('?')))
+        || (inBattle && Boolean(playerName && !playerName.startsWith('?')))
         || (options?.hasEnteredOverworld === undefined && hasActiveGameState)
     );
 

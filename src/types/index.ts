@@ -58,3 +58,6 @@ export {
     AbortError,
     TimeoutError,
 } from './errors.js';
+export type { CpuState, CpuHealthReport } from '../core/NativeMgbaCore.js';
+export type { SaveStateOptions } from '../core/MgbaEmulator.js';
+export { EmulatorCrashError } from '../core/MgbaEmulator.js';

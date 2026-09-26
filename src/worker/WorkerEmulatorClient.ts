@@ -33,11 +33,15 @@ import type {
     MemorySnapshotOptions,
     StateHandle,
     HeldButtonStatus,
+    CpuState,
+    CpuHealthReport,
+    SaveStateOptions,
 } from '../types/index.js';
 import {
     validateInputAction,
     validateStepSequenceOptions,
     type StepSequenceOptions,
+    EmulatorCrashError,
 } from '../types/index.js';
 import type { MemorySnapshotReader } from '../core/MemoryReader.js';
 import { SnapshotMemoryReader } from '../core/MemoryReader.js';
@@ -81,8 +85,12 @@ export function reconstructWorkerError(rawErr: WorkerSerializedError): Error {
             err = new TimeoutError(message);
             break;
         default:
-            err = new Error(message);
-            err.name = rawErr.name || 'Error';
+            if (rawErr.name === 'EmulatorCrashError') {
+                err = new EmulatorCrashError(message);
+            } else {
+                err = new Error(message);
+                err.name = rawErr.name || 'Error';
+            }
             break;
     }
     if (rawErr.stack) {
@@ -1028,8 +1036,61 @@ export class WorkerEmulatorClient extends EventEmitter {
     /**
      * Saves emulator state atomically to a file from the worker thread.
      */
-    public async saveState(filepath: string): Promise<boolean> {
-        return this.sendRequest<boolean>({ type: 'saveState', filepath });
+    public async saveState(filepath: string, options?: SaveStateOptions): Promise<boolean> {
+        return this.sendRequest<boolean>({ type: 'saveState', filepath, options });
+    }
+
+    /**
+     * Clones active cartridge battery RAM and writes to a standalone .sav file atomically.
+     */
+    public async saveBatteryFile(filepath: string): Promise<boolean> {
+        return this.sendRequest<boolean>({ type: 'saveBatteryFile', filepath });
+    }
+
+    /**
+     * Loads a standalone .sav file into active core battery RAM buffer.
+     */
+    public async loadBatteryFile(filepath: string): Promise<boolean> {
+        return this.sendRequest<boolean>({ type: 'loadBatteryFile', filepath });
+    }
+
+    /**
+     * Retrieves current active cartridge SRAM buffer.
+     */
+    public async getSram(): Promise<Buffer> {
+        const res = await this.sendRequest<Uint8Array>({ type: 'getSram' });
+        return toNodeBuffer(res);
+    }
+
+    /**
+     * Writes cartridge SRAM directly.
+     */
+    public async setSram(buffer: Buffer | Uint8Array): Promise<boolean> {
+        if (!(buffer instanceof Uint8Array)) {
+            throw new TypeError('setSram: buffer must be an instance of Buffer or Uint8Array');
+        }
+        return this.sendRequest<boolean>({ type: 'setSram', buffer });
+    }
+
+    /**
+     * Retrieves current CPU register and execution status.
+     */
+    public async getCpuState(): Promise<CpuState> {
+        return this.sendRequest<CpuState>({ type: 'getCpuState' });
+    }
+
+    /**
+     * Assesses CPU execution integrity and returns a health report.
+     */
+    public async checkCpuHealth(): Promise<CpuHealthReport> {
+        return this.sendRequest<CpuHealthReport>({ type: 'checkCpuHealth' });
+    }
+
+    /**
+     * Returns true if client has been closed or marked fatal.
+     */
+    public get isDestroyed(): boolean {
+        return this.isClosed || this.isFatal;
     }
 
     /**

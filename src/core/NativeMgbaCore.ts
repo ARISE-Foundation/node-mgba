@@ -77,6 +77,45 @@ const mgba_batch_request_t = koffi.struct('mgba_batch_request_t', {
     _reserved: koffi.array('uint8_t', 3),
 });
 
+export interface CpuState {
+    readonly pc: number;
+    readonly sp: number;
+    readonly a: number;
+    readonly b: number;
+    readonly c: number;
+    readonly d: number;
+    readonly e: number;
+    readonly f: number;
+    readonly h: number;
+    readonly l: number;
+    readonly halted: boolean;
+    readonly ime: boolean;
+}
+
+export interface CpuHealthReport {
+    readonly ok: boolean;
+    readonly reason?: string;
+    readonly pc: number;
+    readonly sp: number;
+    readonly halted: boolean;
+    readonly ime: boolean;
+}
+
+const mgba_cpu_state_t = koffi.struct('mgba_cpu_state_t', {
+    pc: 'int32_t',
+    sp: 'int32_t',
+    a: 'int32_t',
+    b: 'int32_t',
+    c: 'int32_t',
+    d: 'int32_t',
+    e: 'int32_t',
+    f: 'int32_t',
+    h: 'int32_t',
+    l: 'int32_t',
+    halted: 'bool',
+    ime: 'bool',
+});
+
 // C Function Signatures
 const mgba_open = lib.func('mgba_open', mgba_handle_ptr, ['string']);
 const mgba_close = lib.func('mgba_close', 'void', [mgba_handle_ptr]);
@@ -144,6 +183,12 @@ const mgba_save_state = lib.func('mgba_save_state', 'bool', [mgba_handle_ptr, 's
 const mgba_load_state = lib.func('mgba_load_state', 'bool', [mgba_handle_ptr, 'string']);
 const mgba_save_state_buffer = lib.func('mgba_save_state_buffer', 'size_t', [mgba_handle_ptr, koffi.out(koffi.pointer('uint8_t')), 'size_t']);
 const mgba_load_state_buffer = lib.func('mgba_load_state_buffer', 'bool', [mgba_handle_ptr, koffi.pointer('uint8_t'), 'size_t']);
+
+const mgba_save_battery_file = lib.func('mgba_save_battery_file', 'bool', [mgba_handle_ptr, 'string']);
+const mgba_load_battery_file = lib.func('mgba_load_battery_file', 'bool', [mgba_handle_ptr, 'string']);
+const mgba_copy_sram = lib.func('mgba_copy_sram', 'size_t', [mgba_handle_ptr, koffi.out(koffi.pointer('uint8_t')), 'size_t']);
+const mgba_write_sram = lib.func('mgba_write_sram', 'bool', [mgba_handle_ptr, koffi.pointer('uint8_t'), 'size_t']);
+const mgba_get_cpu_state = lib.func('mgba_get_cpu_state', 'bool', [mgba_handle_ptr, koffi.out(koffi.pointer(mgba_cpu_state_t))]);
 
 const mgba_get_audio_sample_rate = lib.func('mgba_get_audio_sample_rate', 'uint32_t', [mgba_handle_ptr]);
 const mgba_read_audio_frames = lib.func('mgba_read_audio_frames', 'size_t', [
@@ -768,6 +813,119 @@ export class NativeMgbaCore {
             this.updateSampleRate();
         }
         return success;
+    }
+
+    public saveBatteryFile(filepath: string): boolean {
+        this.ensureOpen();
+        if (!filepath || typeof filepath !== 'string') {
+            throw new Error('saveBatteryFile: filepath must be a non-empty string');
+        }
+        return mgba_save_battery_file(this.handle, filepath);
+    }
+
+    public loadBatteryFile(filepath: string): boolean {
+        this.ensureOpen();
+        if (!filepath || typeof filepath !== 'string') {
+            throw new Error('loadBatteryFile: filepath must be a non-empty string');
+        }
+        return mgba_load_battery_file(this.handle, filepath);
+    }
+
+    public getSram(): Buffer {
+        this.ensureOpen();
+        const maxSramSize = 1024 * 1024;
+        const tempBuf = Buffer.alloc(maxSramSize);
+        const written = mgba_copy_sram(this.handle, tempBuf, maxSramSize);
+        if (written > 0) {
+            const out = Buffer.allocUnsafe(written);
+            tempBuf.copy(out, 0, 0, written);
+            return out;
+        }
+        return Buffer.alloc(0);
+    }
+
+    public setSram(buffer: Buffer | Uint8Array): boolean {
+        this.ensureOpen();
+        if (!(buffer instanceof Uint8Array)) {
+            throw new TypeError('setSram: buffer must be an instance of Buffer or Uint8Array');
+        }
+        if (buffer.length === 0) {
+            throw new Error('setSram: buffer must not be empty');
+        }
+        const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+        return mgba_write_sram(this.handle, buf, buf.length);
+    }
+
+    public getCpuState(): CpuState {
+        this.ensureOpen();
+        const stateOut: Partial<CpuState> = {};
+        const ok = mgba_get_cpu_state(this.handle, stateOut);
+        if (!ok) {
+            throw new Error('Failed to retrieve CPU state');
+        }
+        return {
+            pc: stateOut.pc ?? 0,
+            sp: stateOut.sp ?? 0,
+            a: stateOut.a ?? 0,
+            b: stateOut.b ?? 0,
+            c: stateOut.c ?? 0,
+            d: stateOut.d ?? 0,
+            e: stateOut.e ?? 0,
+            f: stateOut.f ?? 0,
+            h: stateOut.h ?? 0,
+            l: stateOut.l ?? 0,
+            halted: Boolean(stateOut.halted),
+            ime: Boolean(stateOut.ime),
+        };
+    }
+
+    public checkCpuHealth(): CpuHealthReport {
+        const state = this.getCpuState();
+        const isGb = this.romInfo?.platform === 'GB/GBC';
+
+        if (isGb) {
+            if (state.sp >= 0xE000 && state.sp < 0xFE00) {
+                return {
+                    ok: false,
+                    reason: 'Stack pointer in Echo RAM (0xE000 <= SP < 0xFE00)',
+                    pc: state.pc,
+                    sp: state.sp,
+                    halted: state.halted,
+                    ime: state.ime,
+                };
+            }
+            if (state.sp < 0x8000) {
+                return {
+                    ok: false,
+                    reason: 'Stack pointer outside RAM (SP < 0x8000)',
+                    pc: state.pc,
+                    sp: state.sp,
+                    halted: state.halted,
+                    ime: state.ime,
+                };
+            }
+            if (state.halted && !state.ime) {
+                const ie = this.busRead8(0xFFFF);
+                if ((ie & 0x1F) === 0) {
+                    return {
+                        ok: false,
+                        reason: 'Terminal CPU deadlock: HALT with IME and IE disabled',
+                        pc: state.pc,
+                        sp: state.sp,
+                        halted: state.halted,
+                        ime: state.ime,
+                    };
+                }
+            }
+        }
+
+        return {
+            ok: true,
+            pc: state.pc,
+            sp: state.sp,
+            halted: state.halted,
+            ime: state.ime,
+        };
     }
 
     private updateSampleRate(): void {

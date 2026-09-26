@@ -1269,8 +1269,39 @@ async function processRequest(req: WorkerRequest): Promise<void> {
                 break;
             }
             case 'saveState': {
-                const ok = await emulator.saveState(req.filepath);
+                const ok = await emulator.saveState(req.filepath, req.options);
                 postWorkerResponse(req.id, true, ok);
+                break;
+            }
+            case 'saveBatteryFile': {
+                const ok = emulator.saveBatteryFile(req.filepath);
+                postWorkerResponse(req.id, true, ok);
+                break;
+            }
+            case 'loadBatteryFile': {
+                const ok = emulator.loadBatteryFile(req.filepath);
+                postWorkerResponse(req.id, true, ok);
+                break;
+            }
+            case 'getSram': {
+                const sram = emulator.getSram();
+                const serialized = serializeMemoryBuffer(sram);
+                postWorkerResponse(req.id, true, serialized.payload, serialized.transferList);
+                break;
+            }
+            case 'setSram': {
+                const ok = emulator.setSram(Buffer.from(req.buffer));
+                postWorkerResponse(req.id, true, ok);
+                break;
+            }
+            case 'getCpuState': {
+                const state = emulator.getCpuState();
+                postWorkerResponse(req.id, true, state);
+                break;
+            }
+            case 'checkCpuHealth': {
+                const health = emulator.checkCpuHealth();
+                postWorkerResponse(req.id, true, health);
                 break;
             }
             case 'loadState': {

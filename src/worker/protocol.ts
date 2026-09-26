@@ -1,5 +1,5 @@
 import type { HeldButtonStatus, InputAction, StepSequenceOptions } from '../types/InputAction.js';
-import type { MemorySnapshotOptions, ReadSpec, MemoryRegionName } from '../types/index.js';
+import type { MemorySnapshotOptions, ReadSpec, MemoryRegionName, SaveStateOptions } from '../types/index.js';
 import type { MemorySnapshotReader } from '../core/MemoryReader.js';
 
 export interface BootstrapWorkerRequestBase {
@@ -79,6 +79,34 @@ export interface GetFrameCounterRequest extends StatefulWorkerRequestBase {
 export interface SaveStateRequest extends StatefulWorkerRequestBase {
     readonly type: 'saveState';
     readonly filepath: string;
+    readonly options?: SaveStateOptions | undefined;
+}
+
+export interface SaveBatteryFileRequest extends StatefulWorkerRequestBase {
+    readonly type: 'saveBatteryFile';
+    readonly filepath: string;
+}
+
+export interface LoadBatteryFileRequest extends StatefulWorkerRequestBase {
+    readonly type: 'loadBatteryFile';
+    readonly filepath: string;
+}
+
+export interface GetSramRequest extends StatefulWorkerRequestBase {
+    readonly type: 'getSram';
+}
+
+export interface SetSramRequest extends StatefulWorkerRequestBase {
+    readonly type: 'setSram';
+    readonly buffer: Uint8Array;
+}
+
+export interface GetCpuStateRequest extends StatefulWorkerRequestBase {
+    readonly type: 'getCpuState';
+}
+
+export interface CheckCpuHealthRequest extends StatefulWorkerRequestBase {
+    readonly type: 'checkCpuHealth';
 }
 
 export interface LoadStateRequest extends StatefulWorkerRequestBase {
@@ -295,6 +323,12 @@ export type WorkerRequest =
     | GetFrameCounterRequest
     | SaveStateRequest
     | LoadStateRequest
+    | SaveBatteryFileRequest
+    | LoadBatteryFileRequest
+    | GetSramRequest
+    | SetSramRequest
+    | GetCpuStateRequest
+    | CheckCpuHealthRequest
     | SaveStateHandleRequest
     | RestoreStateHandleRequest
     | ResetRequest
@@ -355,8 +389,14 @@ export type WorkerRequestPayload =
     | { readonly type: 'cancelSequence'; readonly sequenceId: number }
     | { readonly type: 'initMediaPort'; readonly port: import('node:worker_threads').MessagePort }
     | { readonly type: 'getFrameCounter' }
-    | { readonly type: 'saveState'; readonly filepath: string }
+    | { readonly type: 'saveState'; readonly filepath: string; readonly options?: SaveStateOptions | undefined }
     | { readonly type: 'loadState'; readonly filepath: string }
+    | { readonly type: 'saveBatteryFile'; readonly filepath: string }
+    | { readonly type: 'loadBatteryFile'; readonly filepath: string }
+    | { readonly type: 'getSram' }
+    | { readonly type: 'setSram'; readonly buffer: Uint8Array }
+    | { readonly type: 'getCpuState' }
+    | { readonly type: 'checkCpuHealth' }
     | { readonly type: 'saveStateHandle' }
     | { readonly type: 'restoreStateHandle'; readonly handleId: string }
     | { readonly type: 'reset' }

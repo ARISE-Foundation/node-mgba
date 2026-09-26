@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { WorkerEmulatorClient } from '../worker/WorkerEmulatorClient.js';
 import type {
@@ -21,15 +23,20 @@ import {
     type MemoryRegionName,
     type MemorySnapshotOptions,
     type HeldButtonStatus,
+    type CpuState,
+    type CpuHealthReport,
+    type SaveStateOptions,
 } from '../types/index.js';
 import { expandButtonsToInputActions, resolveButtonMask } from './InputActionCompiler.js';
 import {
     MgbaInstance,
+    type MgbaLoadOptions,
     type MgbaScreenApi,
     type MgbaMemoryApi,
     type MgbaControlsApi,
     type MgbaStatesApi,
     type MgbaSymbolsApi,
+    type MgbaDiagnosticsApi,
 } from '../Mgba.js';
 import type { MgbaPlugin } from '../plugins/Plugin.js';
 import { LifecycleError, TimeoutError } from '../types/errors.js';
@@ -42,6 +49,28 @@ export interface EmulatorControllerOptions {
     readonly mediaSinks?: readonly MediaSink[];
     readonly client?: WorkerEmulatorClient;
     readonly workerOptions?: WorkerEmulatorClientOptions;
+
+    /**
+     * Standalone cartridge battery save file path (.sav).
+     * - String: explicit filepath.
+     * - `true`: auto-derive from `romPath` (e.g., `/path/to/game.gb` -> `/path/to/game.sav`).
+     * - Omit, `false`, or `undefined`: disabled.
+     */
+    readonly batterySavePath?: string | boolean;
+
+    /**
+     * Automatically flush active cartridge SRAM to `batterySavePath`
+     * whenever `saveState()` succeeds. Defaults to `true` when `batterySavePath` is enabled.
+     */
+    readonly autoFlushBatteryOnSave?: boolean;
+
+    /**
+     * Default CPU crash guard policy for `saveState()` calls.
+     * When `true`, all `saveState()` calls reject if the CPU is in a deadlocked or corrupted state.
+     * Overridable per-call via `saveState(filepath, { guardCrashes: false })`.
+     * Defaults to `false`.
+     */
+    readonly guardCrashes?: boolean;
 }
 
 class SimpleAsyncMutex {
@@ -74,6 +103,7 @@ export class EmulatorController extends EventEmitter {
     private desiredSinks = new Map<string, MediaSink>();
     private initialMediaPort: import('node:worker_threads').MessagePort | null = null;
 
+    private readonly options: EmulatorControllerOptions;
     private romPath: string | null;
     private romInfo: RomInfo | null = null;
     private targetFps: number;
@@ -94,6 +124,7 @@ export class EmulatorController extends EventEmitter {
 
     constructor(options: EmulatorControllerOptions = {}) {
         super();
+        this.options = options;
         this.romPath = options.romPath || null;
         this.targetFps = options.fps && options.fps > 0 ? options.fps : GB_FPS;
         this.isRealtime = options.realtime !== false;
@@ -112,6 +143,28 @@ export class EmulatorController extends EventEmitter {
         if (options.client) {
             this.clientInstance = options.client;
         }
+    }
+
+    private resolveBatterySavePath(romPath?: string): string | null {
+        if (!this.options.batterySavePath) {
+            return null;
+        }
+        if (typeof this.options.batterySavePath === 'string') {
+            return this.options.batterySavePath;
+        }
+        if (this.options.batterySavePath === true) {
+            const targetRom = romPath ?? this.romPath;
+            if (!targetRom) {
+                throw new Error('Cannot auto-derive batterySavePath: romPath was not provided');
+            }
+            const parsed = path.parse(targetRom);
+            return path.join(parsed.dir, `${parsed.name}.sav`);
+        }
+        return null;
+    }
+
+    public get batterySavePath(): string | null {
+        return this.resolveBatterySavePath();
     }
 
     public get state(): ControllerState {
@@ -160,6 +213,10 @@ export class EmulatorController extends EventEmitter {
 
     public get symbols(): MgbaSymbolsApi {
         return this.getActiveInstance('symbols').symbols;
+    }
+
+    public get diagnostics(): MgbaDiagnosticsApi {
+        return this.getActiveInstance('diagnostics').diagnostics;
     }
 
     public get client(): WorkerEmulatorClient | null {
@@ -256,8 +313,22 @@ export class EmulatorController extends EventEmitter {
                     }
                 }
 
+                const batteryPath = this.resolveBatterySavePath(this.romPath ?? undefined);
+                if (batteryPath && fs.existsSync(batteryPath)) {
+                    const loaded = await this.clientInstance.loadBatteryFile(batteryPath);
+                    if (!loaded) {
+                        throw new Error('Failed to load existing battery save file: ' + batteryPath);
+                    }
+                }
+
+                const instanceOptions: MgbaLoadOptions = {
+                    batterySavePath: batteryPath ?? undefined,
+                    autoFlushBatteryOnSave: this.options.autoFlushBatteryOnSave,
+                    guardCrashes: this.options.guardCrashes,
+                };
+
                 this.romInfo = romInfo;
-                this.instanceValue = new MgbaInstance(this.clientInstance, romInfo);
+                this.instanceValue = new MgbaInstance(this.clientInstance, romInfo, instanceOptions);
 
                 this.clientInstance.on('videoFrame', this.onVideoFrame);
                 this.clientInstance.on('error', this.onClientError);
@@ -311,6 +382,13 @@ export class EmulatorController extends EventEmitter {
                 const client = this.getActiveClient('loadROM');
                 const info = await client.loadROM(romPath);
                 this.romInfo = info;
+                const batteryPath = this.resolveBatterySavePath(romPath);
+                if (batteryPath && fs.existsSync(batteryPath)) {
+                    const loaded = await client.loadBatteryFile(batteryPath);
+                    if (!loaded) {
+                        throw new Error('Failed to load existing battery save file: ' + batteryPath);
+                    }
+                }
                 if (this.instanceValue) {
                     try {
                         await this.instanceValue.disposePlugins();
@@ -318,7 +396,12 @@ export class EmulatorController extends EventEmitter {
                         // Ignore dispose error on reload
                     }
                 }
-                this.instanceValue = new MgbaInstance(client, info);
+                const instanceOptions: MgbaLoadOptions = {
+                    batterySavePath: batteryPath ?? undefined,
+                    autoFlushBatteryOnSave: this.options.autoFlushBatteryOnSave,
+                    guardCrashes: this.options.guardCrashes,
+                };
+                this.instanceValue = new MgbaInstance(client, info, instanceOptions);
                 return info;
             } finally {
                 if (wasRunning) {
@@ -490,10 +573,60 @@ export class EmulatorController extends EventEmitter {
         return client.step(frames, keyMask, options);
     }
 
-    public async saveState(filepath: string): Promise<boolean> {
+    public async saveState(filepath: string, options?: SaveStateOptions): Promise<boolean> {
         const client = this.getActiveClient('saveState');
         return this.operationMutex.runExclusive(async () => {
-            return client.saveState(filepath);
+            const guard = options?.guardCrashes ?? this.options.guardCrashes ?? false;
+            const saved = await client.saveState(filepath, { ...options, guardCrashes: guard });
+            if (saved && this.options.autoFlushBatteryOnSave !== false) {
+                const batteryPath = this.resolveBatterySavePath();
+                if (batteryPath) {
+                    await client.saveBatteryFile(batteryPath);
+                }
+            }
+            return saved;
+        });
+    }
+
+    public async saveBatteryFile(filepath: string): Promise<boolean> {
+        const client = this.getActiveClient('saveBatteryFile');
+        return this.operationMutex.runExclusive(async () => {
+            return client.saveBatteryFile(filepath);
+        });
+    }
+
+    public async loadBatteryFile(filepath: string): Promise<boolean> {
+        const client = this.getActiveClient('loadBatteryFile');
+        return this.operationMutex.runExclusive(async () => {
+            return client.loadBatteryFile(filepath);
+        });
+    }
+
+    public async getSram(): Promise<Buffer> {
+        const client = this.getActiveClient('getSram');
+        return this.operationMutex.runExclusive(async () => {
+            return client.getSram();
+        });
+    }
+
+    public async setSram(buffer: Buffer | Uint8Array): Promise<boolean> {
+        const client = this.getActiveClient('setSram');
+        return this.operationMutex.runExclusive(async () => {
+            return client.setSram(buffer);
+        });
+    }
+
+    public async getCpuState(): Promise<CpuState> {
+        const client = this.getActiveClient('getCpuState');
+        return this.operationMutex.runExclusive(async () => {
+            return client.getCpuState();
+        });
+    }
+
+    public async checkCpuHealth(): Promise<CpuHealthReport> {
+        const client = this.getActiveClient('checkCpuHealth');
+        return this.operationMutex.runExclusive(async () => {
+            return client.checkCpuHealth();
         });
     }
 
@@ -589,6 +722,17 @@ export class EmulatorController extends EventEmitter {
             if (this.initPromise) {
                 try {
                     await this.initPromise;
+                } catch {
+                    // ignore
+                }
+            }
+
+            if (this.clientInstance && !this.clientInstance.isDestroyed) {
+                try {
+                    const batteryPath = this.resolveBatterySavePath();
+                    if (batteryPath) {
+                        await this.clientInstance.saveBatteryFile(batteryPath);
+                    }
                 } catch {
                     // ignore
                 }

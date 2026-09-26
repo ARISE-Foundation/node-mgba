@@ -72,7 +72,10 @@ export class PokemonRedBluePlugin extends GamePlugin<PokemonRedBlueState> {
             hasEnteredOverworld: this.hasEnteredOverworld,
         });
 
-        if (state.systemState === 'OVERWORLD' || state.battle.inBattle) {
+        if (
+            Boolean(state.player.name && !state.player.name.startsWith('?'))
+            && (state.systemState === 'OVERWORLD' || state.battle.inBattle)
+        ) {
             this.hasEnteredOverworld = true;
         }
 

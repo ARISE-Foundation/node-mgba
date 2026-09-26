@@ -1,6 +1,8 @@
 #define ENABLE_VFS 1
 #define ENABLE_DIRECTORIES 1
 
+#include <mgba/flags.h>
+
 #if defined(_WIN32)
 #include <windows.h>
 #endif
@@ -14,9 +16,11 @@
 #include <mgba/internal/gb/gb.h>
 #include <mgba/internal/gb/memory.h>
 #include <mgba/internal/gb/video.h>
+#include <mgba/internal/sm83/sm83.h>
 #include <mgba/internal/gba/gba.h>
 #include <mgba/internal/gba/memory.h>
 #include <mgba/internal/gba/video.h>
+#include <mgba/internal/arm/arm.h>
 #include <mgba-util/vfs.h>
 #include <mgba-util/audio-buffer.h>
 #include <stdio.h>
@@ -892,3 +896,150 @@ void mgba_clear_audio(mgba_handle_t* handle) {
         mAudioBufferClear(buf);
     }
 }
+
+bool mgba_save_battery_file(mgba_handle_t* handle, const char* filepath) {
+    if (!handle || !handle->core || !filepath || !handle->core->savedataClone) return false;
+
+    void* sram_ptr = NULL;
+    size_t sram_size = handle->core->savedataClone(handle->core, &sram_ptr);
+    if (!sram_ptr || sram_size == 0) {
+        if (sram_ptr) {
+            free(sram_ptr);
+        }
+        return false;
+    }
+
+    char temp_path[4096 + 16];
+    int len = snprintf(temp_path, sizeof(temp_path), "%s.tmp", filepath);
+    if (len < 0 || (size_t) len >= sizeof(temp_path)) {
+        free(sram_ptr);
+        return false;
+    }
+
+    struct VFile* vf = VFileOpen(temp_path, O_CREAT | O_TRUNC | O_WRONLY);
+    if (!vf) {
+        free(sram_ptr);
+        return false;
+    }
+
+    ssize_t written = vf->write(vf, sram_ptr, sram_size);
+    vf->close(vf);
+    free(sram_ptr);
+
+    if (written != (ssize_t) sram_size) {
+        unlink(temp_path);
+        return false;
+    }
+
+#if defined(_WIN32)
+    if (!MoveFileExA(temp_path, filepath, MOVEFILE_REPLACE_EXISTING)) {
+        unlink(temp_path);
+        return false;
+    }
+    return true;
+#else
+    if (rename(temp_path, filepath) != 0) {
+        unlink(temp_path);
+        return false;
+    }
+    return true;
+#endif
+}
+
+bool mgba_load_battery_file(mgba_handle_t* handle, const char* filepath) {
+    if (!handle || !handle->core || !filepath || !handle->core->savedataRestore) return false;
+
+    struct VFile* vf = VFileOpen(filepath, O_RDONLY);
+    if (!vf) return false;
+
+    ssize_t size = vf->size(vf);
+    if (size <= 0 || size > 16 * 1024 * 1024) {
+        vf->close(vf);
+        return false;
+    }
+
+    uint8_t* buffer = (uint8_t*) malloc((size_t) size);
+    if (!buffer) {
+        vf->close(vf);
+        return false;
+    }
+
+    ssize_t read_bytes = vf->read(vf, buffer, (size_t) size);
+    vf->close(vf);
+
+    if (read_bytes != size) {
+        free(buffer);
+        return false;
+    }
+
+    bool success = handle->core->savedataRestore(handle->core, buffer, (size_t) size, true);
+    free(buffer);
+    return success;
+}
+
+size_t mgba_copy_sram(mgba_handle_t* handle, uint8_t* out_buffer, size_t max_size) {
+    if (!handle || !handle->core || !out_buffer || max_size == 0 || !handle->core->savedataClone) return 0;
+
+    void* sram_ptr = NULL;
+    size_t sram_size = handle->core->savedataClone(handle->core, &sram_ptr);
+    if (!sram_ptr || sram_size == 0) {
+        if (sram_ptr) {
+            free(sram_ptr);
+        }
+        return 0;
+    }
+
+    if (sram_size > max_size) {
+        free(sram_ptr);
+        return 0;
+    }
+
+    memcpy(out_buffer, sram_ptr, sram_size);
+    free(sram_ptr);
+    return sram_size;
+}
+
+bool mgba_write_sram(mgba_handle_t* handle, const uint8_t* in_buffer, size_t size) {
+    if (!handle || !handle->core || !in_buffer || size == 0 || !handle->core->savedataRestore) return false;
+
+    return handle->core->savedataRestore(handle->core, in_buffer, size, true);
+}
+
+bool mgba_get_cpu_state(mgba_handle_t* handle, mgba_cpu_state_t* state_out) {
+    if (!handle || !handle->core || !state_out) return false;
+
+    memset(state_out, 0, sizeof(*state_out));
+
+    if (handle->core->platform(handle->core) == mPLATFORM_GB) {
+        struct GB* gb = (struct GB*) handle->core->board;
+        if (!gb || !gb->cpu) return false;
+
+        state_out->pc = gb->cpu->pc;
+        state_out->sp = gb->cpu->sp;
+        state_out->a = gb->cpu->a;
+        state_out->f = gb->cpu->f.packed;
+        state_out->b = gb->cpu->b;
+        state_out->c = gb->cpu->c;
+        state_out->d = gb->cpu->d;
+        state_out->e = gb->cpu->e;
+        state_out->h = gb->cpu->h;
+        state_out->l = gb->cpu->l;
+        state_out->halted = gb->cpu->halted;
+        state_out->ime = gb->memory.ime;
+        return true;
+    }
+
+    if (handle->core->platform(handle->core) == mPLATFORM_GBA) {
+        struct GBA* gba = (struct GBA*) handle->core->board;
+        if (!gba || !gba->cpu) return false;
+
+        state_out->pc = gba->cpu->gprs[15];
+        state_out->sp = gba->cpu->gprs[13];
+        state_out->halted = (gba->cpu->halted != 0);
+        state_out->ime = (gba->memory.io[0x208 >> 1] & 1) != 0;
+        return true;
+    }
+
+    return false;
+}
+

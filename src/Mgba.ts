@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import sharp from 'sharp';
 import { Buffer } from 'node:buffer';
 import { EventEmitter } from 'node:events';
@@ -20,6 +22,9 @@ import type {
     MediaSink,
     KeyframeSink,
     StepSequenceOptions,
+    CpuState,
+    CpuHealthReport,
+    SaveStateOptions,
 } from './types/index.js';
 import type {
     ObservationSnapshot,
@@ -44,6 +49,9 @@ export interface MgbaLoadOptions {
     readonly mediaSinks?: readonly MediaSink[] | undefined;
     readonly keyframeSinks?: readonly KeyframeSink[] | undefined;
     readonly symPath?: string | undefined;
+    readonly batterySavePath?: string | boolean | undefined;
+    readonly autoFlushBatteryOnSave?: boolean | undefined;
+    readonly guardCrashes?: boolean | undefined;
 }
 
 export interface WaitForDeclarativeSpec {
@@ -113,6 +121,8 @@ export interface MgbaMemoryApi {
     readonly readBatch: (specs: readonly ReadSpec[]) => Promise<ReadResultValue[]>;
     readonly readMultiple: (addressesOrSymbols: readonly (number | string)[]) => Promise<ReadResultValue[]>;
     readonly snapshot: (options?: MemorySnapshotOptions) => Promise<MemorySnapshotReader>;
+    readonly getSram: () => Promise<Buffer>;
+    readonly setSram: (buffer: Buffer | Uint8Array) => Promise<boolean>;
 }
 
 export interface MgbaControlsApi {
@@ -133,13 +143,17 @@ export interface MgbaDiagnosticsApi {
     readonly onMemoryChange: (listener: (evt: WorkerMemoryChangeEvent) => void) => () => void;
     readonly onStateRestore: (listener: (evt: WorkerStateRestoreEvent) => void) => () => void;
     readonly setWatches: (watches: readonly { key: string; address: number; length?: number }[]) => Promise<void>;
+    readonly getCpuState: () => Promise<CpuState>;
+    readonly checkCpuHealth: () => Promise<CpuHealthReport>;
 }
 
 export interface MgbaStatesApi {
     readonly save: () => Promise<StateHandle>;
     readonly restore: (handle: StateHandle | string) => Promise<boolean>;
-    readonly saveToFile: (filepath: string) => Promise<boolean>;
+    readonly saveToFile: (filepath: string, options?: SaveStateOptions) => Promise<boolean>;
     readonly loadFromFile: (filepath: string) => Promise<boolean>;
+    readonly saveBatteryToFile: (filepath: string) => Promise<boolean>;
+    readonly loadBatteryFromFile: (filepath: string) => Promise<boolean>;
 }
 
 export interface MgbaSymbolsApi {
@@ -159,13 +173,16 @@ export class MgbaInstance extends EventEmitter {
     public readonly client: WorkerEmulatorClient;
     public readonly symbolManager: SymbolManager;
     private romInfo: RomInfo;
+    private options: MgbaLoadOptions;
     private activePlugins = new Map<string, { pluginClass: unknown; instance: unknown }>();
     private eventCleanups: Array<() => void> = [];
+    private closePromise?: Promise<void>;
 
-    constructor(client: WorkerEmulatorClient, romInfo: RomInfo) {
+    constructor(client: WorkerEmulatorClient, romInfo: RomInfo, options: MgbaLoadOptions = {}) {
         super();
         this.client = client;
         this.romInfo = romInfo;
+        this.options = options;
         this.symbolManager = new SymbolManager();
 
         // Forward worker events to instance EventEmitter
@@ -188,6 +205,13 @@ export class MgbaInstance extends EventEmitter {
             () => this.client.off('memoryChange', onMem),
             () => this.client.off('stateRestore', onRestore),
         ];
+    }
+
+    public get batterySavePath(): string | null {
+        if (typeof this.options.batterySavePath === 'string') {
+            return this.options.batterySavePath;
+        }
+        return null;
     }
 
     /**
@@ -422,6 +446,14 @@ export class MgbaInstance extends EventEmitter {
                 }
                 return obs.memory;
             },
+
+            getSram: async (): Promise<Buffer> => {
+                return this.client.getSram();
+            },
+
+            setSram: async (buffer: Buffer | Uint8Array): Promise<boolean> => {
+                return this.client.setSram(buffer);
+            },
         };
     }
 
@@ -501,6 +533,12 @@ export class MgbaInstance extends EventEmitter {
             setWatches: async (watches: readonly { key: string; address: number; length?: number }[]): Promise<void> => {
                 return this.client.setWatchPlan(watches);
             },
+            getCpuState: async (): Promise<CpuState> => {
+                return this.client.getCpuState();
+            },
+            checkCpuHealth: async (): Promise<CpuHealthReport> => {
+                return this.client.checkCpuHealth();
+            },
         };
     }
 
@@ -518,12 +556,26 @@ export class MgbaInstance extends EventEmitter {
                 return this.client.restoreStateHandle(handleId);
             },
 
-            saveToFile: async (filepath: string): Promise<boolean> => {
-                return this.client.saveState(filepath);
+            saveToFile: async (filepath: string, options?: SaveStateOptions): Promise<boolean> => {
+                const guard = options?.guardCrashes ?? this.options.guardCrashes ?? false;
+                const ok = await this.client.saveState(filepath, { ...options, guardCrashes: guard });
+                const batteryPath = this.batterySavePath;
+                if (ok && this.options.autoFlushBatteryOnSave !== false && batteryPath) {
+                    await this.client.saveBatteryFile(batteryPath);
+                }
+                return ok;
             },
 
             loadFromFile: async (filepath: string): Promise<boolean> => {
                 return this.client.loadState(filepath);
+            },
+
+            saveBatteryToFile: async (filepath: string): Promise<boolean> => {
+                return this.client.saveBatteryFile(filepath);
+            },
+
+            loadBatteryFromFile: async (filepath: string): Promise<boolean> => {
+                return this.client.loadBatteryFile(filepath);
             },
         };
     }
@@ -787,8 +839,22 @@ export class MgbaInstance extends EventEmitter {
      * Closes the instance and cleans up installed plugins and the worker client.
      */
     public async close(): Promise<void> {
-        await this.disposePlugins();
-        await this.client.close();
+        if (this.closePromise) {
+            return this.closePromise;
+        }
+        this.closePromise = (async () => {
+            const batteryPath = this.batterySavePath;
+            if (batteryPath && !this.client.isDestroyed) {
+                try {
+                    await this.client.saveBatteryFile(batteryPath);
+                } catch {
+                    // Ignore battery flush error on close
+                }
+            }
+            await this.disposePlugins();
+            await this.client.close();
+        })();
+        return this.closePromise;
     }
 }
 
@@ -814,8 +880,27 @@ export class Mgba {
                 }
             }
 
+            let resolvedBatteryPath: string | undefined;
+            if (options.batterySavePath === true) {
+                const parsed = path.parse(romPath);
+                resolvedBatteryPath = path.join(parsed.dir, `${parsed.name}.sav`);
+            } else if (typeof options.batterySavePath === 'string') {
+                resolvedBatteryPath = options.batterySavePath;
+            }
+
             const romInfo = await client.loadROM(romPath);
-            const instance = new MgbaInstance(client, romInfo);
+            const instanceOptions: MgbaLoadOptions = {
+                ...options,
+                ...(resolvedBatteryPath !== undefined ? { batterySavePath: resolvedBatteryPath } : {}),
+            };
+            const instance = new MgbaInstance(client, romInfo, instanceOptions);
+
+            if (resolvedBatteryPath && fs.existsSync(resolvedBatteryPath)) {
+                const loaded = await client.loadBatteryFile(resolvedBatteryPath);
+                if (!loaded) {
+                    throw new Error(`Failed to load existing battery save file: ${resolvedBatteryPath}`);
+                }
+            }
 
             if (options.symPath) {
                 await instance.symbols.loadRgbdsSymFile(options.symPath);
