@@ -174,6 +174,8 @@ export type {
     SequenceExecutionResult,
     SequenceHandle,
     PressButtonsOptions,
+    BackgroundRenderResult,
+    RenderBackgroundLayersOptions,
 } from './types/index.js';
 export {
     press,

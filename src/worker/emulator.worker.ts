@@ -32,8 +32,10 @@ import {
     type WorkerAudioChunkPayload,
     type WorkerKeyframePayload,
     type WorkerTurnResultPayload,
+    type WorkerBackgroundRenderPayload,
 } from './protocol.js';
-import type { Keyframe, VideoPacket, AudioChunk, TurnResult } from '../types/index.js';
+import type { Keyframe, VideoPacket, AudioChunk, TurnResult, BackgroundRenderResult } from '../types/index.js';
+import { BackgroundLayerRenderer } from '../graphics/BackgroundLayerRenderer.js';
 import type { StateHandle } from '../types/StateHandle.js';
 import {
     AbortError,
@@ -732,6 +734,25 @@ function serializeMemoryBuffer(buffer: Uint8Array): { payload: Uint8Array; trans
     return { payload: buffer, transferList };
 }
 
+function serializeBackgroundRenderResult(result: BackgroundRenderResult): { payload: WorkerBackgroundRenderPayload; transferList: ArrayBuffer[] } {
+    const transferList: ArrayBuffer[] = [];
+    const buf = extractTransferableArrayBuffer(result.buffer);
+    if (buf) transferList.push(buf);
+    return {
+        payload: {
+            width: result.width,
+            height: result.height,
+            buffer: result.buffer,
+            scrollX: result.scrollX,
+            scrollY: result.scrollY,
+            meanLuminance: result.meanLuminance,
+            isTiledMode: result.isTiledMode,
+            layersRendered: result.layersRendered,
+        },
+        transferList,
+    };
+}
+
 function serializeError(err: unknown): WorkerSerializedError {
     const error = (err instanceof Error ? err : new Error(String(err))) as Error & { code?: string };
     let code: WorkerErrorCode = 'ERR_UNKNOWN';
@@ -1139,6 +1160,12 @@ async function processRequest(req: WorkerRequest): Promise<void> {
             case 'getOam': {
                 const oam = emulator.core.getOamBuffer();
                 const serialized = serializeMemoryBuffer(oam);
+                postWorkerResponse(req.id, true, serialized.payload, serialized.transferList);
+                break;
+            }
+            case 'renderBackgroundLayers': {
+                const res = BackgroundLayerRenderer.render(emulator.core, req.options);
+                const serialized = serializeBackgroundRenderResult(res);
                 postWorkerResponse(req.id, true, serialized.payload, serialized.transferList);
                 break;
             }

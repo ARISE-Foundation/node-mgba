@@ -1,5 +1,6 @@
 import type { HeldButtonStatus, InputAction, StepSequenceOptions } from '../types/InputAction.js';
 import type { MemorySnapshotOptions, ReadSpec, MemoryRegionName, SaveStateOptions } from '../types/index.js';
+import type { RenderBackgroundLayersOptions } from '../types/graphics.js';
 import type { MemorySnapshotReader } from '../core/MemoryReader.js';
 
 export interface BootstrapWorkerRequestBase {
@@ -176,6 +177,22 @@ export interface GetOamRequest extends StatefulWorkerRequestBase {
     readonly type: 'getOam';
 }
 
+export interface RenderBackgroundLayersRequest extends StatefulWorkerRequestBase {
+    readonly type: 'renderBackgroundLayers';
+    readonly options?: RenderBackgroundLayersOptions | undefined;
+}
+
+export interface WorkerBackgroundRenderPayload {
+    readonly width: number;
+    readonly height: number;
+    readonly buffer: Uint8Array;
+    readonly scrollX: number;
+    readonly scrollY: number;
+    readonly meanLuminance: number;
+    readonly isTiledMode: boolean;
+    readonly layersRendered: readonly number[];
+}
+
 export interface RegisterMediaSinkRequest extends BootstrapWorkerRequestBase {
     readonly type: 'registerMediaSink';
     readonly name: string;
@@ -339,6 +356,7 @@ export type WorkerRequest =
     | ObserveRequest
     | GetVramRequest
     | GetOamRequest
+    | RenderBackgroundLayersRequest
     | BusWrite8Request
     | BankWrite8Request
     | RegisterMediaSinkRequest
@@ -407,6 +425,7 @@ export type WorkerRequestPayload =
     | { readonly type: 'observe'; readonly screen?: boolean | undefined; readonly memory?: MemorySnapshotOptions | undefined; readonly reads?: readonly ReadSpec[] | undefined; readonly slices?: readonly SliceSpec[] | undefined }
     | { readonly type: 'getVram' }
     | { readonly type: 'getOam' }
+    | { readonly type: 'renderBackgroundLayers'; readonly options?: RenderBackgroundLayersOptions | undefined }
     | { readonly type: 'busWrite8'; readonly address: number; readonly value: number }
     | { readonly type: 'bankWrite8'; readonly spaceId: number; readonly bank: number; readonly offset: number; readonly value: number }
     | { readonly type: 'registerMediaSink'; readonly name: string }

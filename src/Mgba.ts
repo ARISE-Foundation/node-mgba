@@ -25,6 +25,8 @@ import type {
     CpuState,
     CpuHealthReport,
     SaveStateOptions,
+    RenderBackgroundLayersOptions,
+    BackgroundRenderResult,
 } from './types/index.js';
 import type {
     ObservationSnapshot,
@@ -105,6 +107,7 @@ export interface MgbaScreenApi {
         bgTilemap: TilemapData;
         windowTilemap?: TilemapData | undefined;
     }>;
+    readonly renderBackgroundLayers: (options?: RenderBackgroundLayersOptions) => Promise<BackgroundRenderResult>;
 }
 
 export interface MgbaAudioApi {
@@ -383,6 +386,10 @@ export class MgbaInstance extends EventEmitter {
                     bgTilemap,
                     windowTilemap,
                 };
+            },
+
+            renderBackgroundLayers: async (options?: RenderBackgroundLayersOptions): Promise<BackgroundRenderResult> => {
+                return this.client.renderBackgroundLayers(options);
             },
         };
     }

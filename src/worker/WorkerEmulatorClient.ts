@@ -17,6 +17,7 @@ import type {
     WorkerAudioChunkPayload,
     WorkerKeyframePayload,
     WorkerTurnResultPayload,
+    WorkerBackgroundRenderPayload,
 } from './protocol.js';
 import type {
     Keyframe,
@@ -36,6 +37,8 @@ import type {
     CpuState,
     CpuHealthReport,
     SaveStateOptions,
+    RenderBackgroundLayersOptions,
+    BackgroundRenderResult,
 } from '../types/index.js';
 import {
     validateInputAction,
@@ -1018,6 +1021,23 @@ export class WorkerEmulatorClient extends EventEmitter {
     public async getOam(): Promise<Buffer> {
         const res = await this.sendRequest<Uint8Array>({ type: 'getOam' });
         return toNodeBuffer(res);
+    }
+
+    public async renderBackgroundLayers(options: RenderBackgroundLayersOptions = {}): Promise<BackgroundRenderResult> {
+        const res = await this.sendRequest<WorkerBackgroundRenderPayload>({
+            type: 'renderBackgroundLayers',
+            options,
+        });
+        return {
+            width: res.width,
+            height: res.height,
+            buffer: toNodeBuffer(res.buffer),
+            scrollX: res.scrollX,
+            scrollY: res.scrollY,
+            meanLuminance: res.meanLuminance,
+            isTiledMode: res.isTiledMode,
+            layersRendered: res.layersRendered,
+        };
     }
 
     public async saveStateHandle(): Promise<StateHandle> {

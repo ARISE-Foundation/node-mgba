@@ -61,3 +61,8 @@ export {
 export type { CpuState, CpuHealthReport } from '../core/NativeMgbaCore.js';
 export type { SaveStateOptions } from '../core/MgbaEmulator.js';
 export { EmulatorCrashError } from '../core/MgbaEmulator.js';
+export type {
+    RenderBackgroundLayersOptions,
+    BackgroundRenderResult,
+} from './graphics.js';
+
