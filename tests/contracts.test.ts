@@ -460,49 +460,53 @@ test('Contracts & Error Boundaries', async (t) => {
     });
 
     await t.test('30. EmulatorController holdButtons and releaseButtons manage persistent controller state', async () => {
-        const controller = new EmulatorController({ romPath });
-        await controller.initialize();
+        const controller = new EmulatorController({ romPath, realtime: false });
+        try {
+            await controller.initialize();
 
-        await controller.holdButtons(['Right', 'B']);
-        const held = await controller.getHeldButtons();
-        assert.equal(held.length, 2);
-        assert.ok(held.some((h) => h.button === 'RIGHT'));
-        assert.ok(held.some((h) => h.button === 'B'));
+            await controller.holdButtons(['Right', 'B']);
+            const held = await controller.getHeldButtons();
+            assert.equal(held.length, 2);
+            assert.ok(held.some((h) => h.button === 'RIGHT'));
+            assert.ok(held.some((h) => h.button === 'B'));
 
-        // Partial release
-        await controller.releaseButtons(['B']);
-        const remaining = await controller.getHeldButtons();
-        assert.equal(remaining.length, 1);
-        assert.equal(remaining[0]?.button, 'RIGHT');
+            // Partial release
+            await controller.releaseButtons(['B']);
+            const remaining = await controller.getHeldButtons();
+            assert.equal(remaining.length, 1);
+            assert.equal(remaining[0]?.button, 'RIGHT');
 
-        // Full release
-        await controller.releaseButtons();
-        const empty = await controller.getHeldButtons();
-        assert.equal(empty.length, 0);
-
-        await controller.close();
+            // Full release
+            await controller.releaseButtons();
+            const empty = await controller.getHeldButtons();
+            assert.equal(empty.length, 0);
+        } finally {
+            await controller.close();
+        }
     });
 
     await t.test('31. EmulatorController restoreHeldButtons restores persistent mask and frame counts', async () => {
-        const controller = new EmulatorController({ romPath });
-        await controller.initialize();
+        const controller = new EmulatorController({ romPath, realtime: false });
+        try {
+            await controller.initialize();
 
-        await controller.restoreHeldButtons([
-            { button: 'RIGHT', framesHeld: 42 },
-            { button: 'A', framesHeld: 15 },
-        ]);
+            await controller.restoreHeldButtons([
+                { button: 'RIGHT', framesHeld: 42 },
+                { button: 'A', framesHeld: 15 },
+            ]);
 
-        const held = await controller.getHeldButtons();
-        assert.equal(held.length, 2);
-        const rightStatus = held.find((h) => h.button === 'RIGHT');
-        assert.ok(rightStatus);
-        assert.equal(rightStatus.framesHeld, 42);
+            const held = await controller.getHeldButtons();
+            assert.equal(held.length, 2);
+            const rightStatus = held.find((h) => h.button === 'RIGHT');
+            assert.ok(rightStatus);
+            assert.equal(rightStatus.framesHeld, 42);
 
-        const aStatus = held.find((h) => h.button === 'A');
-        assert.ok(aStatus);
-        assert.equal(aStatus.framesHeld, 15);
-
-        await controller.close();
+            const aStatus = held.find((h) => h.button === 'A');
+            assert.ok(aStatus);
+            assert.equal(aStatus.framesHeld, 15);
+        } finally {
+            await controller.close();
+        }
     });
 
     await t.test('32. VideoPacket carries keys and maskToButtonNames decodes masks accurately', async () => {
