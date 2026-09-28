@@ -1,3 +1,5 @@
+<p align="center"><img src=".github/assets/hero.png" alt="node-mgba" width="100%"></p>
+
 # node-mgba
 
 [![CI](https://github.com/ARISE-Foundation/node-mgba/actions/workflows/ci.yml/badge.svg)](https://github.com/ARISE-Foundation/node-mgba/actions/workflows/ci.yml)
