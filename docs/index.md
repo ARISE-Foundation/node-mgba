@@ -28,12 +28,18 @@ features:
   - icon: { src: /icon-dpad.png, width: 48, height: 48 }
     title: Frame-perfect input
     details: Press, hold and release buttons, run input sequences, and advance exactly as many frames as you need.
+    link: /guide/getting-started#input-frame-stepping
+    linkText: Input & frame stepping
   - icon: { src: /icon-chip.png, width: 48, height: 48 }
     title: Direct memory access
     details: Read and write Game Boy and GBA memory with no socket in between, or batch many reads into one call.
+    link: /guide/getting-started#reading-writing-memory
+    linkText: Reading & writing memory
   - icon: { src: /icon-camera.png, width: 48, height: 48 }
     title: Screen and audio capture
     details: Grab raw frames or PNG/WebP, crop regions, and stream audio and video over WebSockets or straight into ffmpeg.
+    link: /guide/getting-started#screen-capture-cropping
+    linkText: Screen capture & cropping
   - icon: { src: /icon-plug.png, width: 48, height: 48 }
     title: Plugins and schema DSL
     details: Describe game structs declaratively and decode RAM into typed state. Ships with a Pokémon Red/Blue plugin to learn from.
