@@ -58,7 +58,7 @@ Running an emulator in a Node.js process alongside Large Language Model (LLM) ag
 
 ---
 
-## Canonical Approach: `EmulatorController`
+## Real-Time Playback with `EmulatorController`
 
 `EmulatorController` is the central orchestrator that wraps the worker actor, manages lifecycle states, coordinates media sinks, and exposes high-level agent primitives.
 
@@ -330,7 +330,7 @@ controller.unregisterMediaSink('vod-recorder');
 
 #### Per-Frame Input Tracking (`VideoPacket.keys`)
 
-Each `VideoPacket` delivered to `onVideoFrame(packet)` carries the `keys: number` bitmask representing the hardware buttons held on that exact frame (`0` when idle). You can decode this mask to canonical button names using `maskToButtonNames`:
+Each `VideoPacket` delivered to `onVideoFrame(packet)` carries the `keys: number` bitmask representing the hardware buttons held on that exact frame (`0` when idle). You can decode this mask to standard button names using `maskToButtonNames`:
 
 ```typescript
 import { maskToButtonNames, type MediaSink, type VideoPacket } from 'node-mgba';

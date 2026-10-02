@@ -65,7 +65,7 @@ export class OverworldPlugin extends GamePlugin<OverworldState> {
 }
 ```
 
-> **Note on Model Support**: `GamePlugin` constructors validate `emu.console.model` against `supportedModels`. Since memory snapshotting currently targets the Game Boy memory bus, specify GB-family models (`DMG`, `CGB`, `SGB`). Full-bus snapshotting for GBA models is on the roadmap.
+> **Note on `GamePlugin` vs Custom Plugins**: Custom plugins attached via `emu.use(PluginClass)` can target any console including GBA by reading `emu.memory` directly (`readBatch`, `slice`, `read32LE`), as implemented for games like Pokémon FireRed and Emerald. The limitation described above applies specifically to the `GamePlugin<TState>` convenience class and its automated `getState()` method: because `GamePlugin.getState()` delegates to `emu.memory.snapshot()`, which takes a whole-bus Game Boy snapshot (`wram`, `io`, `hram`), `GamePlugin` decoders currently target GB-family models (`DMG`, `CGB`, `SGB`). A dedicated `GbaGamePlugin` / full-bus GBA snapshot abstraction is planned on the roadmap.
 
 ### Using the Plugin
 

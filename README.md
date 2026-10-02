@@ -1,4 +1,4 @@
-<p align="center"><img src=".github/assets/hero.png" alt="node-mgba" width="100%"></p>
+<p align="center"><img src=".github/assets/hero.png" alt="node-mgba: headless Game Boy &amp; GBA emulator for Node.js" width="100%"></p>
 
 # node-mgba
 
@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Linux x64](https://img.shields.io/badge/Platform-Linux%20x64-brightgreen.svg)](#)
 
-> **Scriptable, headless mGBA emulator for Node.js — like PyBoy, but powered by `libmgba` for Game Boy, GBC, and GBA.**
+> **Headless, scriptable Game Boy, GBC, and GBA emulator for Node.js — like PyBoy, but powered by mGBA's `libmgba` core.**
 
 `node-mgba` provides native Node.js bindings to the C `libmgba` core. It is built for scripting, agent automation, and machine learning research, giving you direct programmatic control over the emulator:
 
@@ -19,6 +19,7 @@
 
 Originally built to power the 24/7 autonomous agent on **[Gemini Plays Pokémon](https://www.twitch.tv/gemini_plays_pokemon/about)** ([web viewer](https://gpp-viewer.arisef.org)).
 
+<!-- #region usage -->
 ## Installation
 
 ```bash
@@ -55,9 +56,9 @@ await emu.close();
 |---|---|---|---|
 | **Game Boy (DMG / SGB)** | Supported (160×144) | Supported | Supported |
 | **Game Boy Color (CGB)** | Supported (160×144) | Supported | Supported |
-| **Game Boy Advance (AGB)** | Supported (240×160) | Supported (`EWRAM`, `IWRAM`, `ROM`) | *Planned on Roadmap* |
+| **Game Boy Advance (AGB)** | Supported (240×160) | Supported (32-bit bus & all 9 regions) | Partial (planned on roadmap) |
 
-> **Note on GBA Memory Snapshots**: GBA emulation, controls, audio/video streaming, savestates, and direct memory reads are supported. Multi-region snapshots (`emu.observe({ memory: ... })` and `GamePlugin.getState()`) are currently limited to Game Boy (DMG/CGB/SGB) models and planned for GBA.
+> **Note on GBA Memory Snapshots**: GBA emulation, controls, audio/video streaming, savestates, direct 32-bit bus reads, and custom observation queries (`emu.observe({ reads, slices })`) are supported across all memory spaces (`EWRAM`, `IWRAM`, `VRAM`, `SRAM`, `OAM`, `IO`, `PALETTE`, `BIOS`, `ROM`). Multi-region bus snapshotting (`emu.memory.snapshot()`, `emu.observe({ memory: ... })`) and `GamePlugin.getState()` currently target Game Boy (DMG/CGB/SGB) memory layouts; full-bus GBA snapshotting and a dedicated GBA game plugin base class are planned on the roadmap.
 
 ---
 
@@ -208,6 +209,8 @@ controller.on('frame', (frame) => {
 });
 ```
 
+<!-- #endregion usage -->
+
 ---
 
 ## Performance
@@ -276,6 +279,7 @@ pnpm run gui:dev
 
 ---
 
+<!-- #region exports -->
 ## Subpath Exports
 
 | Import | Description |
@@ -286,7 +290,11 @@ pnpm run gui:dev
 | `node-mgba/testing` | In-memory `MockMemoryReader` for unit testing decoders |
 | `node-mgba/browser` | Browser media playback helpers (`WebAudioPlayer`, `CanvasRenderer`) |
 
+<!-- #endregion exports -->
+
 ## Documentation
+
+The full docs, with search, live at **[arise-foundation.github.io/node-mgba](https://arise-foundation.github.io/node-mgba/)**.
 
 - [Real-Time Emulation & Autonomous Agents](docs/REALTIME_LOOP.md)
 - [Plugin Authoring Guide](docs/PLUGINS.md)

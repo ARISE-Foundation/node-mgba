@@ -16,3 +16,7 @@ gui/dist/
 .vscode/
 .DS_Store
 
+
+# VitePress docs site
+docs/.vitepress/cache/
+docs/.vitepress/dist/
